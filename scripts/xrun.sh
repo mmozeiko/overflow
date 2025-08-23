@@ -16,7 +16,7 @@ set -euo pipefail
 #   sudo apt install --no-install-recommends wasi-libc libclang-rt-dev-wasm32                             # wasm + wasi
 # then get wasmtime binary:
 #   sudo apt install --no-install-recommends curl ca-certificates xz-utils
-#   curl -sfL https://github.com/bytecodealliance/wasmtime/releases/download/v34.0.1/wasmtime-v34.0.1-$(uname -m)-linux.tar.xz | tar xJ --strip-components=1 wasmtime-v34.0.1-$(uname -m)-linux/wasmtime
+#   curl -sfL https://github.com/bytecodealliance/wasmtime/releases/download/v36.0.1/wasmtime-v26.0.1-$(uname -m)-linux.tar.xz | tar xJ --strip-components=1 wasmtime-v36.0.1-$(uname -m)-linux/wasmtime
 #   sudo mv wasmtime /usr/local/bin/
 
 # setup on macOS:

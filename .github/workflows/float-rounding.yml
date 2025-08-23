@@ -49,7 +49,7 @@ jobs:
       - if: ${{ matrix.os == 'wasi' }}
         run: |
           sudo apt update && sudo apt install --no-install-recommends lld wasi-libc libclang-rt-dev-wasm32
-          curl -sfL https://github.com/bytecodealliance/wasmtime/releases/download/v34.0.1/wasmtime-v34.0.1-$(uname -m)-linux.tar.xz | tar xJ --strip-components=1 wasmtime-v34.0.1-$(uname -m)-linux/wasmtime
+          curl -sfL https://github.com/bytecodealliance/wasmtime/releases/download/v36.0.1/wasmtime-v36.0.1-$(uname -m)-linux.tar.xz | tar xJ --strip-components=1 wasmtime-v36.0.1-$(uname -m)-linux/wasmtime
           sudo mv wasmtime /usr/local/bin/
 
       - if: ${{ matrix.os == 'windows' }}
