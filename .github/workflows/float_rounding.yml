@@ -1,10 +1,10 @@
 
-name: float-rounding
+name: float_rounding
 
 on:
   push:
     branches: [ 'main' ]
-    paths:    [ 'source/FloatRounding.h' ]
+    paths:    [ 'float_rounding/*' ]
 
 jobs:
   float-rounding:
@@ -55,17 +55,17 @@ jobs:
       - if: ${{ matrix.os == 'windows' }}
         shell: cmd
         run: |
-          call scripts\xrun.cmd source\FloatRounding.h "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" -DROUNDING_TEST -DROUNDING_QUICK c++ norun || exit /b 1
-          call scripts\xrun.cmd source\FloatRounding.h "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" -DROUNDING_TEST -DROUNDING_QUICK c         || exit /b 1
+          call scripts\xrun.cmd float_rounding\float_rounding_test.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" -DROUNDING_QUICK c++ norun || exit /b 1
+          call scripts\xrun.cmd float_rounding\float_rounding_test.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" -DROUNDING_QUICK c         || exit /b 1
           if "${{ matrix.arch }}" equ "x64" (
-            call scripts\xrun.cmd source\FloatRounding.h "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" -DROUNDING_TEST -DROUNDING_QUICK c sse4  || exit /b 1
+            call scripts\xrun.cmd float_rounding\float_rounding_test.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" -DROUNDING_QUICK c sse4  || exit /b 1
           )
 
       - if: ${{ matrix.os != 'windows' }}
         shell: bash
         run: |
-          scripts/xrun.sh  source/FloatRounding.h "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" -DROUNDING_TEST -DROUNDING_QUICK c++ norun
-          scripts/xrun.sh  source/FloatRounding.h "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" -DROUNDING_TEST -DROUNDING_QUICK c
+          scripts/xrun.sh float_rounding/float_rounding_test.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" -DROUNDING_QUICK c++ norun
+          scripts/xrun.sh float_rounding/float_rounding_test.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" -DROUNDING_QUICK c
           if [[ "${{ matrix.arch }}" == "x64" ]]; then
-            scripts/xrun.sh  source/FloatRounding.h "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" -DROUNDING_TEST -DROUNDING_QUICK c sse4
+            scripts/xrun.sh float_rounding/float_rounding_test.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" -DROUNDING_QUICK c sse4
           fi
