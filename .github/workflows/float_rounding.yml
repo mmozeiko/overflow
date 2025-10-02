@@ -23,7 +23,7 @@ jobs:
           - { os: linux,   cc: gcc,   arch: arm64,  runs: ubuntu-24.04-arm }
           - { os: linux,   cc: clang, arch: rv64,   runs: ubuntu-24.04     }
           - { os: linux,   cc: gcc,   arch: rv64,   runs: ubuntu-24.04     }
-          - { os: macos,   cc: clang, arch: x64,    runs: macos-13         }
+          - { os: macos,   cc: clang, arch: x64,    runs: macos-15-intel   }
           - { os: macos,   cc: clang, arch: arm64,  runs: macos-15         }
           - { os: mingw,   cc: clang, arch: x64,    runs: ubuntu-24.04     }
           - { os: mingw,   cc: gcc,   arch: x64,    runs: ubuntu-24.04     }
