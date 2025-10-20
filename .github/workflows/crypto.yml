@@ -1,0 +1,93 @@
+
+name: crypto
+
+on:
+  push:
+    branches: [ 'main' ]
+    paths:    [ 'crypto/*' ]
+
+jobs:
+  crypto:
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows, cc: msvc,  arch: x64,    runs: windows-2025     }
+          - { os: windows, cc: clang, arch: x64,    runs: windows-2025     }
+          - { os: windows, cc: msvc,  arch: arm64,  runs: windows-11-arm   }
+          - { os: windows, cc: clang, arch: arm64,  runs: windows-11-arm   }
+          - { os: linux,   cc: clang, arch: x64,    runs: ubuntu-24.04     }
+          - { os: linux,   cc: gcc,   arch: x64,    runs: ubuntu-24.04     }
+          - { os: linux,   cc: clang, arch: arm64,  runs: ubuntu-24.04-arm }
+          - { os: linux,   cc: gcc,   arch: arm64,  runs: ubuntu-24.04-arm }
+          - { os: macos,   cc: clang, arch: x64,    runs: macos-15-intel   }
+          - { os: macos,   cc: clang, arch: arm64,  runs: macos-15         }
+          - { os: mingw,   cc: clang, arch: x64,    runs: ubuntu-24.04     }
+#          - { os: mingw,   cc: gcc,   arch: x64,    runs: ubuntu-24.04     }
+          - { os: wasi,    cc: clang, arch: wasm32, runs: ubuntu-24.04     }
+
+    name: ${{ matrix.os }}-${{ matrix.cc }}-${{ matrix.arch }}
+
+    runs-on: ${{ matrix.runs }}
+
+    steps:
+
+      - uses: actions/checkout@v5
+
+      - id: crypto-test-cache
+        uses: actions/cache@v4
+        with:
+          path: crypto/utils/generated/*.h
+          key: crypto-test-cache
+
+      - name: generate tests
+        if: steps.crypto-test-cache.outputs.cache-hit != 'true'
+        run: python crypto/utils/test_generate.py
+
+      - name: linux/x64 dependencies
+        if: ${{ matrix.os == 'linux' && matrix.arch == 'x64' }}
+        run: sudo apt update && sudo apt install --no-install-recommends g++-14
+
+      - name: linux/arm64 dependencies
+        if: ${{ matrix.os == 'linux' && matrix.arch == 'arm64' }}
+        run: sudo apt update && sudo apt install --no-install-recommends g++-14-aarch64-linux-gnu
+
+      - name: mingw dependencies
+        if: ${{ matrix.os == 'mingw' }}
+        run: sudo apt update && sudo apt install --no-install-recommends lld g++-mingw-w64-x86-64-posix wine
+
+      - name: wasm dependencies
+        if: ${{ matrix.os == 'wasi' }}
+        run: |
+          sudo apt update && sudo apt install --no-install-recommends lld wasi-libc libclang-rt-dev-wasm32
+          curl -sfL https://github.com/bytecodealliance/wasmtime/releases/download/v36.0.1/wasmtime-v36.0.1-$(uname -m)-linux.tar.xz | tar -xJ --strip-components=1 wasmtime-v36.0.1-$(uname -m)-linux/wasmtime
+          sudo mv wasmtime /usr/local/bin/
+
+      - name: download SDE on Windows/x64
+        if: ${{ matrix.os == 'windows' && matrix.arch == 'x64' }}
+        shell: cmd
+        run: curl.exe -sfL https://downloadmirror.intel.com/859732/sde-external-9.58.0-2025-06-16-win.tar.xz | tar.exe -xJ || exit /b
+
+      - name: download SDE on Linux/x64
+        if: ${{ matrix.os == 'linux' && matrix.arch == 'x64' }}
+        run: curl -sfL https://downloadmirror.intel.com/859732/sde-external-9.58.0-2025-06-16-lin.tar.xz | tar -xJ
+
+      - name: windows tests
+        if: ${{ matrix.os == 'windows' }}
+        shell: cmd
+        run: |
+          if "${{ matrix.arch }}" equ "x64" set SDE=-arl
+          set PATH=%CD%\sde-external-9.58.0-2025-06-16-win;%PATH%
+          call scripts\xrun.cmd crypto\utils\test.c  "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" norun c++ || exit /b
+          call scripts\xrun.cmd crypto\utils\test.c  "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" -O2       || exit /b
+
+      - name: non-windows tests
+        if: ${{ matrix.os != 'windows' }}
+        shell: bash
+        run: |
+          export GCC=gcc-14
+          export PATH=$(pwd)/sde-external-9.58.0-2025-06-16-lin:${PATH}
+          [[ "${{ matrix.os }}" == "linux" && "${{ matrix.arch }}" == "x64" ]] && export SDE=-arl
+          scripts/xrun.sh crypto/utils/test.c  "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" norun c++
+          scripts/xrun.sh crypto/utils/test.c  "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" -O2
