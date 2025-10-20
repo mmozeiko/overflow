@@ -48,7 +48,7 @@ declare DISTRIB_ID
 
 function arg()
 {
-    for x in ${ARGS[@]}; do [[ ${x} == ${1} ]] && return 0; done
+    for x in ${ARGS[@]+"${ARGS[@]}"}; do [[ ${x} == ${1} ]] && return 0; done
     return 1
 }
 
@@ -64,7 +64,7 @@ function xrun()
 
   echo ===== ${OS} ${ARCH} ${CC} =====
 
-  declare OUTPUT=${INPUT%.*}_${OS}_${CC}_${ARCH}.exe
+  declare OUTPUT=$(basename ${INPUT%.*})_${OS}_${CC}_${ARCH}.exe
 
   declare BUILD=()
   declare RUN=()
@@ -91,6 +91,9 @@ function xrun()
       RUN+=("qemu-${ARCH_VALUE}-static")
       [[ ${ARCH} == "rv64" ]] && RUN+=("-cpu rv64,v=true,vlen=128,elen=64,vext_spec=v1.0,rvv_ta_all_1s=true,rvv_ma_all_1s=true")
       qemu-${ARCH_VALUE}-static --version | head -1
+    elif [[ ${SDE:-} != "" ]]; then
+      RUN+=("sde64" "${SDE}" "--")
+      sde64 -version | head -1
     fi
 
   elif [[ ${OS} == "macos" ]]; then
@@ -128,7 +131,7 @@ function xrun()
   arg "c++"  && BUILD+=("-x c++")
   arg "sse4" && BUILD+=("-msse4.2")
   BUILD+=(${CFLAGS})
-  for x in ${ARGS[@]}; do [[ ${x} == -* ]] && BUILD+=(${x}); done
+  for x in ${ARGS[@]+"${ARGS[@]}"}; do [[ ${x} == -* ]] && BUILD+=(${x}); done
   BUILD+=(${INPUT})
   BUILD+=(${LDFLAGS})
 

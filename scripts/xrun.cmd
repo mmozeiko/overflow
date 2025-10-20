@@ -106,6 +106,11 @@ if "%OS%" equ "windows" (
   rem cannot run arm64 on x64
   if "%ARCH%_%PROCESSOR_ARCHITECTURE%" equ "arm64_AMD64" set NORUN=1
 
+  if "%SDE%" neq "" (
+    sde.exe -version || exit /b 1
+    set RUN=sde.exe %SDE% -- !RUN!
+  )
+
 ) else if "%OS%" equ "linux" (
 
   set ARCH_VALUE=
@@ -121,28 +126,36 @@ if "%OS%" equ "windows" (
   if "%ARCH%" neq "%HOST_ARCH%" (
     set RUN=qemu-!ARCH_VALUE!-static
     if "%ARCH%" equ "rv64" set RUN=!RUN! -cpu rv64,v=true,vlen=128,elen=64,vext_spec=v1.0,rvv_ta_all_1s=true,rvv_ma_all_1s=true
-    %WSL% bash -c "qemu-!ARCH_VALUE!-static --version | head -1" || exit / b1
+    %WSL% bash -ic "qemu-!ARCH_VALUE!-static --version | head -1" || exit / b1
+  ) else if "%SDE%" neq "" (
+    %WSL% bash -ic "sde64 -version | head -1" || exit /b 1
+    set RUN=sde64 %SDE% -- !RUN!
   )
 
-  for /f "tokens=1 delims= " %%a in ("!BUILD!") do %WSL% bash -c "%%a --version | head -1" || exit /b 1
+  for /f "tokens=1 delims= " %%a in ("!BUILD!") do %WSL% bash -ic "%%a --version | head -1" || exit /b 1
 
   set BUILD=%WSL% !BUILD! !LDFLAGS! -o %OUTPUT%
-  set RUN=%WSL% bash -c "!RUN! ./%OUTPUT%"
+  set RUN=%WSL% bash -ic "!RUN! ./%OUTPUT%"
 
 ) else if "%OS%" equ "mingw" (
 
   if "%CC%" equ "gcc"   set BUILD=x86_64-w64-mingw32-%GCC% !BUILD!
   if "%CC%" equ "clang" set BUILD=%CLANG% -fuse-ld=lld -target x86_64-w64-mingw32 !BUILD!
 
-  for /f "tokens=1 delims= " %%a in ("!BUILD!") do %WSL% bash -c "%%a --version | head -1" || exit /b 1
+  for /f "tokens=1 delims= " %%a in ("!BUILD!") do %WSL% bash -ic "%%a --version | head -1" || exit /b 1
 
   set BUILD=%WSL% !BUILD! !LDFLAGS! -o %OUTPUT%
   set RUN=%OUTPUT%
 
+  if "%SDE%" neq "" (
+    sde.exe -version || exit /b 1
+    set RUN=sde.exe %SDE% -- !RUN!
+  )
+
 ) else if "%OS%" equ "wasi" (
 
   %WSL% bash -c "wasmtime --version" || exit /b 1
-  for /f "tokens=1 delims= " %%a in ("!BUILD!") do %WSL% bash -c "%CLANG% --version | head -1" || exit /b 1
+  for /f "tokens=1 delims= " %%a in ("!BUILD!") do %WSL% bash -ic "%CLANG% --version | head -1" || exit /b 1
 
   set BUILD=%WSL% %CLANG% -fuse-ld=lld -target wasm32-wasi !BUILD! !LDFLAGS! -o %OUTPUT%
   set RUN=%WSL% wasmtime %OUTPUT%
