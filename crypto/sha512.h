@@ -306,7 +306,7 @@ static inline int sha512_cpuid(void)
         DWORD bitsize = sizeof(bits);
         RegGetValueA(HKEY_LOCAL_MACHINE, "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0", "CP 4030", RRF_RT_QWORD | RRF_ZEROONFAILURE, NULL, &bits, &bitsize);
         // bits from ID_AA64ISAR0_EL1
-        int has_arm64 = ((bits >> 15) & 0xf) == 0x2;
+        int has_arm64 = ((bits >> 12) & 0xf) == 0x2;
 #elif defined(__linux__)
         unsigned long hwcap = getauxval(AT_HWCAP);
         int has_arm64 = hwcap & HWCAP_SHA512;
