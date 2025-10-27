@@ -181,20 +181,16 @@ static void sha512_process_vsha512(uint64_t* state, const uint8_t* block, size_t
 
     // message qwords are loaded as 64-bit big-endian values
 
-    #define W(i) w[(i)%4]
-
     // 4 wide round calculations
-    #define QROUND(i) do {                                                                                                                                                          \
-        /* first 4 rounds load input block */                                                                                                                                       \
-        if (i < 4) W(i) = _mm256_shuffle_epi8(_mm256_loadu_si256(&buffer[i]), bswap);                                                                                               \
-        /* update message schedule */                                                                                                                                               \
-        if (i > 2 && i < 19) W(i-3) = _mm256_sha512msg2_epi64(_mm256_add_epi64(W(i-3), _mm256_permute4x64_epi64(_mm256_blend_epi32(W(i-1), W(i), 3), _MM_SHUFFLE(0,3,2,1))), W(i)); \
-        if (i > 0 && i < 17) W(i-1) = _mm256_sha512msg1_epi64(W(i-1), _mm256_castsi256_si128(W(i)));                                                                                \
-        /* add round constants */                                                                                                                                                   \
-        __m256i tmp = _mm256_add_epi64(W(i), _mm256_loadu_si256((const __m256i*)&SHA512_K[4*i]));                                                                                   \
-        /* round functions */                                                                                                                                                       \
-        state1 = _mm256_sha512rnds2_epi64(state1, state0, _mm256_castsi256_si128(tmp));                                                                                             \
-        state0 = _mm256_sha512rnds2_epi64(state0, state1, _mm256_extracti128_si256(tmp, 1));                                                                                        \
+    #define QROUND(i,m0,m1,m2,m3) do {                                                                                                                              \
+        /* update message schedule */                                                                                                                               \
+        if (i > 2 && i < 19) m1 = _mm256_sha512msg2_epi64(_mm256_add_epi64(m1, _mm256_permute4x64_epi64(_mm256_blend_epi32(m3, m0, 3), _MM_SHUFFLE(0,3,2,1))), m0); \
+        if (i > 0 && i < 17) m3 = _mm256_sha512msg1_epi64(m3, _mm256_castsi256_si128(m0));                                                                          \
+        /* add round constants */                                                                                                                                   \
+        __m256i tmp = _mm256_add_epi64(m0, _mm256_loadu_si256((const __m256i*)&SHA512_K[4*i]));                                                                     \
+        /* 4 round functions */                                                                                                                                     \
+        s1 = _mm256_sha512rnds2_epi64(s1, s0, _mm256_castsi256_si128(tmp));                                                                                         \
+        s0 = _mm256_sha512rnds2_epi64(s0, s1, _mm256_extracti128_si256(tmp, 1));                                                                                    \
     } while(0)
 
     const __m256i* buffer = (const __m256i*)block;
@@ -207,56 +203,62 @@ static void sha512_process_vsha512(uint64_t* state, const uint8_t* block, size_t
     __m256i efgh = _mm256_permute4x64_epi64(_mm256_loadu_si256((const __m256i*)&state[4]), _MM_SHUFFLE(0,1,2,3)); // [e,f,g,h]
 
     // qword order for vsha512rnds2 instruction
-    __m256i state0 = _mm256_permute2x128_si256(efgh, abcd, (3 << 4) | 1); // [a,b,e,f]
-    __m256i state1 = _mm256_permute2x128_si256(efgh, abcd, (2 << 4) | 0); // [c,d,g,h]
+    __m256i s0 = _mm256_permute2x128_si256(efgh, abcd, 0x31); // [a,b,e,f]
+    __m256i s1 = _mm256_permute2x128_si256(efgh, abcd, 0x20); // [c,d,g,h]
 
     do
     {
         // remember current state
-        __m256i last0 = state0;
-        __m256i last1 = state1;
+        __m256i last0 = s0;
+        __m256i last1 = s1;
 
-        __m256i w[4];
+        // load initial message schedule, 128-byte block
+        __m256i w0 = _mm256_shuffle_epi8(_mm256_loadu_si256(&buffer[0]), bswap);
+        __m256i w1 = _mm256_shuffle_epi8(_mm256_loadu_si256(&buffer[1]), bswap);
+        __m256i w2 = _mm256_shuffle_epi8(_mm256_loadu_si256(&buffer[2]), bswap);
+        __m256i w3 = _mm256_shuffle_epi8(_mm256_loadu_si256(&buffer[3]), bswap);
+        buffer += 4;
 
-        QROUND(0);
-        QROUND(1);
-        QROUND(2);
-        QROUND(3);
-        QROUND(4);
-        QROUND(5);
-        QROUND(6);
-        QROUND(7);
-        QROUND(8);
-        QROUND(9);
-        QROUND(10);
-        QROUND(11);
-        QROUND(12);
-        QROUND(13);
-        QROUND(14);
-        QROUND(15);
-        QROUND(16);
-        QROUND(17);
-        QROUND(18);
-        QROUND(19);
+        QROUND( 0, w0, w1, w2, w3);
+        QROUND( 1, w1, w2, w3, w0);
+        QROUND( 2, w2, w3, w0, w1);
+        QROUND( 3, w3, w0, w1, w2);
+
+        QROUND( 4, w0, w1, w2, w3);
+        QROUND( 5, w1, w2, w3, w0);
+        QROUND( 6, w2, w3, w0, w1);
+        QROUND( 7, w3, w0, w1, w2);
+
+        QROUND( 8, w0, w1, w2, w3);
+        QROUND( 9, w1, w2, w3, w0);
+        QROUND(10, w2, w3, w0, w1);
+        QROUND(11, w3, w0, w1, w2);
+
+        QROUND(12, w0, w1, w2, w3);
+        QROUND(13, w1, w2, w3, w0);
+        QROUND(14, w2, w3, w0, w1);
+        QROUND(15, w3, w0, w1, w2);
+
+        QROUND(16, w0, w1, w2, w3);
+        QROUND(17, w1, w2, w3, w0);
+        QROUND(18, w2, w3, w0, w1);
+        QROUND(19, w3, w0, w1, w2);
 
         // update next state
-        state0 = _mm256_add_epi64(state0, last0);
-        state1 = _mm256_add_epi64(state1, last1);
-
-        buffer += 4;
+        s0 = _mm256_add_epi64(s0, last0);
+        s1 = _mm256_add_epi64(s1, last1);
     }
     while (--count);
 
     // restore qword order
-    abcd = _mm256_permute2x128_si256(state1, state0, (3 << 4) | 1);
-    efgh = _mm256_permute2x128_si256(state1, state0, (2 << 4) | 0);
+    abcd = _mm256_permute2x128_si256(s1, s0, 0x31);
+    efgh = _mm256_permute2x128_si256(s1, s0, 0x20);
 
     // save the new state
     _mm256_storeu_si256((__m256i*)&state[0], _mm256_permute4x64_epi64(abcd, _MM_SHUFFLE(0,1,2,3)));
     _mm256_storeu_si256((__m256i*)&state[4], _mm256_permute4x64_epi64(efgh, _MM_SHUFFLE(0,1,2,3)));
 
     #undef QROUND
-    #undef W
 }
 
 #endif // defined(__x86_64__) || defined(_M_AMD64)
@@ -337,109 +339,128 @@ static inline int sha512_cpuid(void)
 SHA512_TARGET
 static void sha512_process_arm64(uint64_t* state, const uint8_t* block, size_t count)
 {
-    #define W(i) w[(i)%8]
-    #define S(i) vstate.val[3-(i)%4]
-
-    #define DROUND(i) do {                                                                                          \
-        /* load 8 round constants */                                                                                \
-        if ((i % 4) == 0) rk = vld1q_u64_x4(&SHA512_K[2*i]);                                                        \
-        /* first 8 rounds reverse byte order in each 64-bit lane of input block */                                  \
-        if (i <  8) W(i) = vreinterpretq_u64_u8(vrev64q_u8(msg[(i/4)%2].val[i%4]));                                 \
-        /* update message schedule for next rounds */                                                               \
-        if (i >= 8) W(i) = vsha512su1q_u64(vsha512su0q_u64(W(i), W(i-7)), W(i-1), vextq_u64(W(i-4), W(i-3), 1));    \
-        /* add round constants */                                                                                   \
-        uint64x2_t tmp = vaddq_u64(W(i), rk.val[i%4]);                                                              \
-        /* 2 round functions */                                                                                     \
-        uint64x2_t x0 = vaddq_u64(vextq_u64(tmp, tmp, 1), S(i+0));                                                  \
-        uint64x2_t x1 = vsha512hq_u64(x0, vextq_u64(S(i+1), S(i+0), 1), vextq_u64(S(i+2), S(i+1), 1));              \
-        S(i+0) = vsha512h2q_u64(x1, S(i+2), S(i+3));                                                                \
-        S(i+2) = vaddq_u64(S(i+2), x1);                                                                             \
+    #define DROUND(i, ab,cd,ef,gh, m0,m1,m2,m3,m4,m5,m6,m7) do {                             \
+        /* update message schedule */                                                        \
+        if (i >= 8) m0 = vsha512su1q_u64(vsha512su0q_u64(m0, m1), m7, vextq_u64(m4, m5, 1)); \
+        /* add round constants */                                                            \
+        uint64x2_t tmp = vaddq_u64(m0, rk.val[i%4]);                                         \
+        /* 2 round functions */                                                              \
+        uint64x2_t gf = vextq_u64(ef, gh, 1);                                                \
+        uint64x2_t ed = vextq_u64(cd, ef, 1);                                                \
+        uint64x2_t x0 = vaddq_u64(vextq_u64(tmp, tmp, 1), gh);                               \
+        uint64x2_t x1 = vsha512hq_u64(x0, gf, ed);                                           \
+        gh = vsha512h2q_u64(x1, cd, ab);                                                     \
+        cd = vaddq_u64(cd, x1);                                                              \
     } while (0)
 
     // load initial state
-    uint64x2x4_t vstate = vld1q_u64_x4(state);
+    uint64x2x4_t s = vld1q_u64_x4(state);
+    uint64x2_t s0 = s.val[0]; // ab
+    uint64x2_t s1 = s.val[1]; // cd
+    uint64x2_t s2 = s.val[2]; // ef
+    uint64x2_t s3 = s.val[3]; // gh
 
     do
     {
         // remember current state
-        uint64x2x4_t vlast = vstate;
+        uint64x2_t last0 = s0;
+        uint64x2_t last1 = s1;
+        uint64x2_t last2 = s2;
+        uint64x2_t last3 = s3;
 
-        // load 128-byte block
-        uint8x16x4_t msg[2] =
-        {
-            vld1q_u8_x4(block + 0 * 16),
-            vld1q_u8_x4(block + 4 * 16),
-        };
+        // load initial message schedule, 128-byte block
+        uint8x16x4_t msg0 = vld1q_u8_x4(block + 0 * 16);
+        uint8x16x4_t msg1 = vld1q_u8_x4(block + 4 * 16);
+        block += SHA512_BLOCK_SIZE;
+
+        // reverse the byte order in each 64-bit lane
+        uint64x2_t w0 = vreinterpretq_u64_u8(vrev64q_u8(msg0.val[0]));
+        uint64x2_t w1 = vreinterpretq_u64_u8(vrev64q_u8(msg0.val[1]));
+        uint64x2_t w2 = vreinterpretq_u64_u8(vrev64q_u8(msg0.val[2]));
+        uint64x2_t w3 = vreinterpretq_u64_u8(vrev64q_u8(msg0.val[3]));
+        uint64x2_t w4 = vreinterpretq_u64_u8(vrev64q_u8(msg1.val[0]));
+        uint64x2_t w5 = vreinterpretq_u64_u8(vrev64q_u8(msg1.val[1]));
+        uint64x2_t w6 = vreinterpretq_u64_u8(vrev64q_u8(msg1.val[2]));
+        uint64x2_t w7 = vreinterpretq_u64_u8(vrev64q_u8(msg1.val[3]));
 
         uint64x2x4_t rk;
-        uint64x2_t w[8];
 
-        DROUND( 0);
-        DROUND( 1);
-        DROUND( 2);
-        DROUND( 3);
+        rk = vld1q_u64_x4(&SHA512_K[0]);
+        DROUND( 0, s0,s1,s2,s3, w0,w1,w2,w3,w4,w5,w6,w7);
+        DROUND( 1, s3,s0,s1,s2, w1,w2,w3,w4,w5,w6,w7,w0);
+        DROUND( 2, s2,s3,s0,s1, w2,w3,w4,w5,w6,w7,w0,w1);
+        DROUND( 3, s1,s2,s3,s0, w3,w4,w5,w6,w7,w0,w1,w2);
 
-        DROUND( 4);
-        DROUND( 5);
-        DROUND( 6);
-        DROUND( 7);
+        rk = vld1q_u64_x4(&SHA512_K[8]);
+        DROUND( 4, s0,s1,s2,s3, w4,w5,w6,w7,w0,w1,w2,w3);
+        DROUND( 5, s3,s0,s1,s2, w5,w6,w7,w0,w1,w2,w3,w4);
+        DROUND( 6, s2,s3,s0,s1, w6,w7,w0,w1,w2,w3,w4,w5);
+        DROUND( 7, s1,s2,s3,s0, w7,w0,w1,w2,w3,w4,w5,w6);
 
-        DROUND( 8);
-        DROUND( 9);
-        DROUND(10);
-        DROUND(11);
+        rk = vld1q_u64_x4(&SHA512_K[16]);
+        DROUND( 8, s0,s1,s2,s3, w0,w1,w2,w3,w4,w5,w6,w7);
+        DROUND( 9, s3,s0,s1,s2, w1,w2,w3,w4,w5,w6,w7,w0);
+        DROUND(10, s2,s3,s0,s1, w2,w3,w4,w5,w6,w7,w0,w1);
+        DROUND(11, s1,s2,s3,s0, w3,w4,w5,w6,w7,w0,w1,w2);
 
-        DROUND(12);
-        DROUND(13);
-        DROUND(14);
-        DROUND(15);
+        rk = vld1q_u64_x4(&SHA512_K[24]);
+        DROUND(12, s0,s1,s2,s3, w4,w5,w6,w7,w0,w1,w2,w3);
+        DROUND(13, s3,s0,s1,s2, w5,w6,w7,w0,w1,w2,w3,w4);
+        DROUND(14, s2,s3,s0,s1, w6,w7,w0,w1,w2,w3,w4,w5);
+        DROUND(15, s1,s2,s3,s0, w7,w0,w1,w2,w3,w4,w5,w6);
 
-        DROUND(16);
-        DROUND(17);
-        DROUND(18);
-        DROUND(19);
+        rk = vld1q_u64_x4(&SHA512_K[32]);
+        DROUND(16, s0,s1,s2,s3, w0,w1,w2,w3,w4,w5,w6,w7);
+        DROUND(17, s3,s0,s1,s2, w1,w2,w3,w4,w5,w6,w7,w0);
+        DROUND(18, s2,s3,s0,s1, w2,w3,w4,w5,w6,w7,w0,w1);
+        DROUND(19, s1,s2,s3,s0, w3,w4,w5,w6,w7,w0,w1,w2);
 
-        DROUND(20);
-        DROUND(21);
-        DROUND(22);
-        DROUND(23);
+        rk = vld1q_u64_x4(&SHA512_K[40]);
+        DROUND(20, s0,s1,s2,s3, w4,w5,w6,w7,w0,w1,w2,w3);
+        DROUND(21, s3,s0,s1,s2, w5,w6,w7,w0,w1,w2,w3,w4);
+        DROUND(22, s2,s3,s0,s1, w6,w7,w0,w1,w2,w3,w4,w5);
+        DROUND(23, s1,s2,s3,s0, w7,w0,w1,w2,w3,w4,w5,w6);
 
-        DROUND(24);
-        DROUND(25);
-        DROUND(26);
-        DROUND(27);
+        rk = vld1q_u64_x4(&SHA512_K[48]);
+        DROUND(24, s0,s1,s2,s3, w0,w1,w2,w3,w4,w5,w6,w7);
+        DROUND(25, s3,s0,s1,s2, w1,w2,w3,w4,w5,w6,w7,w0);
+        DROUND(26, s2,s3,s0,s1, w2,w3,w4,w5,w6,w7,w0,w1);
+        DROUND(27, s1,s2,s3,s0, w3,w4,w5,w6,w7,w0,w1,w2);
 
-        DROUND(28);
-        DROUND(29);
-        DROUND(30);
-        DROUND(31);
+        rk = vld1q_u64_x4(&SHA512_K[56]);
+        DROUND(28, s0,s1,s2,s3, w4,w5,w6,w7,w0,w1,w2,w3);
+        DROUND(29, s3,s0,s1,s2, w5,w6,w7,w0,w1,w2,w3,w4);
+        DROUND(30, s2,s3,s0,s1, w6,w7,w0,w1,w2,w3,w4,w5);
+        DROUND(31, s1,s2,s3,s0, w7,w0,w1,w2,w3,w4,w5,w6);
 
-        DROUND(32);
-        DROUND(33);
-        DROUND(34);
-        DROUND(35);
+        rk = vld1q_u64_x4(&SHA512_K[64]);
+        DROUND(32, s0,s1,s2,s3, w0,w1,w2,w3,w4,w5,w6,w7);
+        DROUND(33, s3,s0,s1,s2, w1,w2,w3,w4,w5,w6,w7,w0);
+        DROUND(34, s2,s3,s0,s1, w2,w3,w4,w5,w6,w7,w0,w1);
+        DROUND(35, s1,s2,s3,s0, w3,w4,w5,w6,w7,w0,w1,w2);
 
-        DROUND(36);
-        DROUND(37);
-        DROUND(38);
-        DROUND(39);
+        rk = vld1q_u64_x4(&SHA512_K[72]);
+        DROUND(36, s0,s1,s2,s3, w4,w5,w6,w7,w0,w1,w2,w3);
+        DROUND(37, s3,s0,s1,s2, w5,w6,w7,w0,w1,w2,w3,w4);
+        DROUND(38, s2,s3,s0,s1, w6,w7,w0,w1,w2,w3,w4,w5);
+        DROUND(39, s1,s2,s3,s0, w7,w0,w1,w2,w3,w4,w5,w6);
 
         // update next state
-        vstate.val[0] = vaddq_u64(vstate.val[0], vlast.val[0]);
-        vstate.val[1] = vaddq_u64(vstate.val[1], vlast.val[1]);
-        vstate.val[2] = vaddq_u64(vstate.val[2], vlast.val[2]);
-        vstate.val[3] = vaddq_u64(vstate.val[3], vlast.val[3]);
-
-        block += SHA512_BLOCK_SIZE;
+        s0 = vaddq_u64(s0, last0);
+        s1 = vaddq_u64(s1, last1);
+        s2 = vaddq_u64(s2, last2);
+        s3 = vaddq_u64(s3, last3);
     }
     while (--count);
 
     // save the new state
-    vst1q_u64_x4(state, vstate);
+    s.val[0] = s0;
+    s.val[1] = s1;
+    s.val[2] = s2;
+    s.val[3] = s3;
+    vst1q_u64_x4(state, s);
 
     #undef DROUND
-    #undef S
-    #undef W
 }
 
 #endif // defined(__aarch64__) || defined(_M_ARM64)
@@ -507,6 +528,7 @@ static void sha512_process(uint64_t* state, const uint8_t* block, size_t count)
         ROUND( 5, d, e, f, g, h, a, b, c);
         ROUND( 6, c, d, e, f, g, h, a, b);
         ROUND( 7, b, c, d, e, f, g, h, a);
+
         ROUND( 8, a, b, c, d, e, f, g, h);
         ROUND( 9, h, a, b, c, d, e, f, g);
         ROUND(10, g, h, a, b, c, d, e, f);
@@ -515,6 +537,7 @@ static void sha512_process(uint64_t* state, const uint8_t* block, size_t count)
         ROUND(13, d, e, f, g, h, a, b, c);
         ROUND(14, c, d, e, f, g, h, a, b);
         ROUND(15, b, c, d, e, f, g, h, a);
+
         ROUND(16, a, b, c, d, e, f, g, h);
         ROUND(17, h, a, b, c, d, e, f, g);
         ROUND(18, g, h, a, b, c, d, e, f);
@@ -523,6 +546,7 @@ static void sha512_process(uint64_t* state, const uint8_t* block, size_t count)
         ROUND(21, d, e, f, g, h, a, b, c);
         ROUND(22, c, d, e, f, g, h, a, b);
         ROUND(23, b, c, d, e, f, g, h, a);
+
         ROUND(24, a, b, c, d, e, f, g, h);
         ROUND(25, h, a, b, c, d, e, f, g);
         ROUND(26, g, h, a, b, c, d, e, f);
@@ -531,6 +555,7 @@ static void sha512_process(uint64_t* state, const uint8_t* block, size_t count)
         ROUND(29, d, e, f, g, h, a, b, c);
         ROUND(30, c, d, e, f, g, h, a, b);
         ROUND(31, b, c, d, e, f, g, h, a);
+
         ROUND(32, a, b, c, d, e, f, g, h);
         ROUND(33, h, a, b, c, d, e, f, g);
         ROUND(34, g, h, a, b, c, d, e, f);
@@ -539,6 +564,7 @@ static void sha512_process(uint64_t* state, const uint8_t* block, size_t count)
         ROUND(37, d, e, f, g, h, a, b, c);
         ROUND(38, c, d, e, f, g, h, a, b);
         ROUND(39, b, c, d, e, f, g, h, a);
+
         ROUND(40, a, b, c, d, e, f, g, h);
         ROUND(41, h, a, b, c, d, e, f, g);
         ROUND(42, g, h, a, b, c, d, e, f);
@@ -547,6 +573,7 @@ static void sha512_process(uint64_t* state, const uint8_t* block, size_t count)
         ROUND(45, d, e, f, g, h, a, b, c);
         ROUND(46, c, d, e, f, g, h, a, b);
         ROUND(47, b, c, d, e, f, g, h, a);
+
         ROUND(48, a, b, c, d, e, f, g, h);
         ROUND(49, h, a, b, c, d, e, f, g);
         ROUND(50, g, h, a, b, c, d, e, f);
@@ -555,6 +582,7 @@ static void sha512_process(uint64_t* state, const uint8_t* block, size_t count)
         ROUND(53, d, e, f, g, h, a, b, c);
         ROUND(54, c, d, e, f, g, h, a, b);
         ROUND(55, b, c, d, e, f, g, h, a);
+
         ROUND(56, a, b, c, d, e, f, g, h);
         ROUND(57, h, a, b, c, d, e, f, g);
         ROUND(58, g, h, a, b, c, d, e, f);
@@ -563,6 +591,7 @@ static void sha512_process(uint64_t* state, const uint8_t* block, size_t count)
         ROUND(61, d, e, f, g, h, a, b, c);
         ROUND(62, c, d, e, f, g, h, a, b);
         ROUND(63, b, c, d, e, f, g, h, a);
+
         ROUND(64, a, b, c, d, e, f, g, h);
         ROUND(65, h, a, b, c, d, e, f, g);
         ROUND(66, g, h, a, b, c, d, e, f);
@@ -571,6 +600,7 @@ static void sha512_process(uint64_t* state, const uint8_t* block, size_t count)
         ROUND(69, d, e, f, g, h, a, b, c);
         ROUND(70, c, d, e, f, g, h, a, b);
         ROUND(71, b, c, d, e, f, g, h, a);
+
         ROUND(72, a, b, c, d, e, f, g, h);
         ROUND(73, h, a, b, c, d, e, f, g);
         ROUND(74, g, h, a, b, c, d, e, f);
