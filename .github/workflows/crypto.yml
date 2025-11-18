@@ -40,6 +40,7 @@ jobs:
         with:
           path: crypto/utils/generated/*.h
           key: crypto-test-cache
+          enableCrossOsArchive: true
 
       - name: generate tests
         if: steps.crypto-test-cache.outputs.cache-hit != 'true'
