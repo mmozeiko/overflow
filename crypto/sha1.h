@@ -54,12 +54,12 @@ static inline void sha1_finish(sha1_ctx* ctx, uint8_t digest[SHA1_DIGEST_SIZE]);
 #   define SHA1_SET32BE(ptr,x) *((__unaligned uint32_t*)(ptr)) = _byteswap_ulong(x)
 #   define SHA1_SET64BE(ptr,x) *((__unaligned uint64_t*)(ptr)) = _byteswap_uint64(x)
 #else
-#   define SHA1_GET32BE(ptr) \
-    (                       \
-        ((ptr)[0] << 24) |  \
-        ((ptr)[1] << 16) |  \
-        ((ptr)[2] <<  8) |  \
-        ((ptr)[3] <<  0)    \
+#   define SHA1_GET32BE(ptr)         \
+    (                                \
+        (uint32_t)((ptr)[0] << 24) | \
+        (uint32_t)((ptr)[1] << 16) | \
+        (uint32_t)((ptr)[2] <<  8) | \
+        (uint32_t)((ptr)[3] <<  0)   \
     )
 #   define SHA1_SET32BE(ptr, x) do          \
     {                                       \
@@ -436,7 +436,7 @@ static void sha1_process(uint32_t* state, const uint8_t* block, size_t count)
     #define F3(x,y,z) (0x8f1bbcdc + ((x & y) | (z & (x | y))))
     #define F4(x,y,z) (0xca62c1d6 + (x ^ y ^ z))
 
-    #define W(i) w[(i)%16]
+    #define W(i) w[(i+16)%16]
 
     #define ROUND(i,a,b,c,d,e,F) do                                                     \
     {                                                                                   \

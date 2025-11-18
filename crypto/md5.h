@@ -50,12 +50,12 @@ static inline void md5_finish(md5_ctx* ctx, uint8_t digest[MD5_DIGEST_SIZE]);
 #   define MD5_SET32LE(ptr,x) *((__unaligned uint32_t*)(ptr)) = (x)
 #   define MD5_SET64LE(ptr,x) *((__unaligned uint64_t*)(ptr)) = (x)
 #else
-#   define MD5_GET32LE(ptr) \
-    (                       \
-        ((ptr)[0] <<  0) |  \
-        ((ptr)[1] <<  8) |  \
-        ((ptr)[2] << 16) |  \
-        ((ptr)[3] << 24)    \
+#   define MD5_GET32LE(ptr)          \
+    (                                \
+        (uint32_t)((ptr)[0] <<  0) | \
+        (uint32_t)((ptr)[1] <<  8) | \
+        (uint32_t)((ptr)[2] << 16) | \
+        (uint32_t)((ptr)[3] << 24)   \
     )
 #   define MD5_SET32LE(ptr, x) do           \
     {                                       \

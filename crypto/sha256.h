@@ -62,12 +62,12 @@ static inline void sha224_finish(sha224_ctx* ctx, uint8_t digest[SHA224_DIGEST_S
 #   define SHA256_SET32BE(ptr,x) *((__unaligned uint32_t*)(ptr)) = _byteswap_ulong(x)
 #   define SHA256_SET64BE(ptr,x) *((__unaligned uint64_t*)(ptr)) = _byteswap_uint64(x)
 #else
-#   define SHA256_GET32BE(ptr)  \
-    (                           \
-        ((ptr)[0] << 24) |      \
-        ((ptr)[1] << 16) |      \
-        ((ptr)[2] <<  8) |      \
-        ((ptr)[3] <<  0)        \
+#   define SHA256_GET32BE(ptr)       \
+    (                                \
+        (uint32_t)((ptr)[0] << 24) | \
+        (uint32_t)((ptr)[1] << 16) | \
+        (uint32_t)((ptr)[2] <<  8) | \
+        (uint32_t)((ptr)[3] <<  0)   \
     )
 #   define SHA256_SET32BE(ptr, x) do        \
     {                                       \
