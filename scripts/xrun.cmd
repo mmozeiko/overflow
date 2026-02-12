@@ -157,7 +157,7 @@ if "%OS%" equ "windows" (
   %WSL% bash -c "wasmtime --version" || exit /b 1
   for /f "tokens=1 delims= " %%a in ("!BUILD!") do %WSL% bash -ic "%CLANG% --version | head -1" || exit /b 1
 
-  set BUILD=%WSL% %CLANG% -fuse-ld=lld -target wasm32-wasi !BUILD! !LDFLAGS! -o %OUTPUT%
+  set BUILD=%WSL% %CLANG% -mbulk-memory -msimd128 -fuse-ld=lld -target wasm32-wasi !BUILD! !LDFLAGS! -o %OUTPUT%
   set RUN=%WSL% wasmtime %OUTPUT%
 
 )

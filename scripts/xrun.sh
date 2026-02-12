@@ -118,7 +118,7 @@ function xrun()
 
   elif [[ ${OS} == "wasi" ]]; then
 
-    BUILD+=("${CLANG:-clang} -fuse-ld=lld -target wasm32-wasi")
+    BUILD+=("${CLANG:-clang} -mbulk-memory -msimd128 -fuse-ld=lld -target wasm32-wasi")
     [[ ${DISTRIB_ID:-} == "Arch" ]] && BUILD+=("--sysroot=/usr/share/wasi-sysroot")
     [[ ${HOST_OS} == "Darwin"    ]] && BUILD+=("--sysroot=/opt/homebrew/share/wasi-sysroot")
 
