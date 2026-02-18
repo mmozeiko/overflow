@@ -1,0 +1,70 @@
+
+name: x128
+
+on:
+  push:
+    branches: [ 'main' ]
+    paths:    [ 'x128/*' ]
+
+jobs:
+  x128:
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows, cc: msvc,  arch: x64,    runs: windows-2025     }
+          - { os: windows, cc: clang, arch: x64,    runs: windows-2025     }
+          - { os: windows, cc: msvc,  arch: arm64,  runs: windows-11-arm   }
+          - { os: windows, cc: clang, arch: arm64,  runs: windows-11-arm   }
+          - { os: linux,   cc: clang, arch: x64,    runs: ubuntu-24.04     }
+          - { os: linux,   cc: gcc,   arch: x64,    runs: ubuntu-24.04     }
+          - { os: linux,   cc: clang, arch: arm64,  runs: ubuntu-24.04-arm }
+          - { os: linux,   cc: gcc,   arch: arm64,  runs: ubuntu-24.04-arm }
+          - { os: linux,   cc: clang, arch: rv64,   runs: ubuntu-24.04     }
+          - { os: linux,   cc: gcc,   arch: rv64,   runs: ubuntu-24.04     }
+          - { os: macos,   cc: clang, arch: x64,    runs: macos-15-intel   }
+          - { os: macos,   cc: clang, arch: arm64,  runs: macos-15         }
+          - { os: mingw,   cc: clang, arch: x64,    runs: ubuntu-24.04     }
+          - { os: mingw,   cc: gcc,   arch: x64,    runs: ubuntu-24.04     }
+          - { os: wasi,    cc: clang, arch: wasm32, runs: ubuntu-24.04     }
+
+    name: ${{ matrix.os }}-${{ matrix.cc }}-${{ matrix.arch }}
+
+    runs-on: ${{ matrix.runs }}
+
+    steps:
+
+      - uses: actions/checkout@v5
+
+      - name: generate tests
+        run: python x128/x128_test_gen.py
+
+      - if: ${{ matrix.os == 'linux' && matrix.arch == 'arm64' }}
+        run: sudo apt update && sudo apt install --no-install-recommends g++-aarch64-linux-gnu
+
+      - if: ${{ matrix.os == 'linux' && matrix.arch == 'rv64' }}
+        run: sudo apt update && sudo apt install --no-install-recommends g++-riscv64-linux-gnu qemu-user-static
+
+      - if: ${{ matrix.os == 'mingw' }}
+        run: sudo apt update && sudo apt install --no-install-recommends lld g++-mingw-w64-x86-64-posix wine
+
+      - if: ${{ matrix.os == 'wasi' }}
+        run: |
+          sudo apt update && sudo apt install --no-install-recommends lld wasi-libc libclang-rt-dev-wasm32
+          curl -sfL https://github.com/bytecodealliance/wasmtime/releases/download/v36.0.1/wasmtime-v36.0.1-$(uname -m)-linux.tar.xz | tar xJ --strip-components=1 wasmtime-v36.0.1-$(uname -m)-linux/wasmtime
+          sudo mv wasmtime /usr/local/bin/
+
+      - if: ${{ matrix.os == 'windows' }}
+        shell: cmd
+        run: |
+          call scripts\xrun.cmd x128\x128_test.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" c++ norun          || exit /b 1
+          call scripts\xrun.cmd x128\x128_test.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" c                  || exit /b 1
+          call scripts\xrun.cmd x128\x128_test.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" c -DX128_NO_INT128 || exit /b 1
+
+      - if: ${{ matrix.os != 'windows' }}
+        shell: bash
+        run: |
+          scripts/xrun.sh x128/x128_test.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" c++ norun
+          scripts/xrun.sh x128/x128_test.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" c
+          scripts/xrun.sh x128/x128_test.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" c -DX128_NO_INT128
