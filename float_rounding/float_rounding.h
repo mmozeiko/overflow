@@ -51,26 +51,29 @@ static inline float FloatNearbyInt(float x);
 
 #if defined(__wasm__)
 #   define ROUNDING_WASM
+#elif defined(__riscv) && __riscv_zfa >= 1000000
+#   define ROUNDING_RISCV // assumes Zfa extension, which is mandatory in RVA23U64 profile
+#elif defined(__aarch64__)
+#   define ROUNDING_NEON
+#elif defined(__x86_64__) && defined(__SSE4_1__)
+#   define ROUNDING_SSE4 // on x64 SSE4.1 can mostly compile to a single "roundss" instruction
 #elif !defined(ROUNDING_NO_SIMD)
-#   if defined(__x86_64__) && defined(__SSE4_1__)
-#       define ROUNDING_SSE4      // on x64 SSE4.1 can mostly compile to a single "roundss" instruction
-#   elif defined(_M_AMD64) && defined(_NO_PREFETCHW)
+#   if defined(_M_AMD64) && defined(_NO_PREFETCHW)
 #       define ROUNDING_SSE4_MSVC // MSVC sets _NO_PREFETCHW macro when /arch:SSE4.2 or higher is enabled
 #   elif defined(_M_AMD64) || defined(__x86_64__)
-#       define ROUNDING_SSE2     // otherwise on x64 use baseline SSE2
-#   elif defined(_M_ARM64) || defined(__aarch64__)
-#       define ROUNDING_NEON
+#       define ROUNDING_SSE2      // otherwise on x64 use baseline SSE2
+#   elif defined(_M_ARM64)
+#       define ROUNDING_NEON_MSVC
 #   endif
 #endif
 
 #if defined(ROUNDING_SSE4_MSVC)
-#   include <immintrin.h> // this is where __round_ss is for MSVC
-#elif defined(ROUNDING_SSE4)
-#   include <smmintrin.h>
+#   include <intrin.h> // __truncf, __floorf, __ceilf, __roundf, __nearbyintf, __copysignf
+#elif defined(ROUNDING_NEON_MSVC)
+#   include <arm_neon.h>
+#   include <intrin.h> //__floorf, __ceilf
 #elif defined(ROUNDING_SSE2)
 #   include <emmintrin.h>
-#elif defined(ROUNDING_NEON)
-#   include <arm_neon.h>
 #endif
 
 #if defined(__FAST_MATH__) || defined(_M_FP_FAST)
@@ -116,23 +119,18 @@ static inline float FloatCopySign(float x, float sign)
 
 float FloatTrunc(float x)
 {
-#if defined(ROUNDING_WASM)
+#if defined(ROUNDING_WASM) || defined(ROUNDING_SSE4) || defined(ROUNDING_NEON) || defined(ROUNDING_RISCV)
 
     return __builtin_truncf(x);
 
-#elif defined(ROUNDING_NEON)
-
-    return vget_lane_f32(vrnd_f32(vdup_n_f32(x)), 0);
-
-#elif defined(ROUNDING_SSE4)
-
-    __m128 y = _mm_set_ss(x);
-    y = _mm_round_ss(_mm_undefined_ps(), y, 3);
-    return _mm_cvtss_f32(y);
-
 #elif defined(ROUNDING_SSE4_MSVC)
 
-    return __round_ss(x, 3);
+    return __truncf(x);
+
+#elif defined(ROUNDING_NEON_MSVC)
+
+    // __truncf on msvc/arm64 generates call to truncf()
+    return vget_lane_f32(vrnd_f32(vdup_n_f32(x)), 0);
 
 #elif defined(ROUNDING_SSE2)
 
@@ -165,23 +163,13 @@ float FloatTrunc(float x)
 
 float FloatFloor(float x)
 {
-#if defined(ROUNDING_WASM)
+#if defined(ROUNDING_WASM) || defined(ROUNDING_SSE4) || defined(ROUNDING_NEON) || defined(ROUNDING_RISCV)
 
     return __builtin_floorf(x);
 
-#elif defined(ROUNDING_NEON)
+#elif defined(ROUNDING_SSE4_MSVC) || defined(ROUNDING_NEON_MSVC)
 
-    return vget_lane_f32(vrndm_f32(vdup_n_f32(x)), 0);
-
-#elif defined(ROUNDING_SSE4)
-
-    __m128 y = _mm_set_ss(x);
-    y = _mm_round_ss(_mm_undefined_ps(), y, 1);
-    return _mm_cvtss_f32(y);
-
-#elif defined(ROUNDING_SSE4_MSVC)
-
-    return __round_ss(x, 1);
+    return __floorf(x);
 
 #elif defined(ROUNDING_SSE2)
 
@@ -217,23 +205,13 @@ float FloatFloor(float x)
 
 float FloatCeil(float x)
 {
-#if defined(ROUNDING_WASM)
+#if defined(ROUNDING_WASM) || defined(ROUNDING_SSE4) || defined(ROUNDING_NEON) || defined(ROUNDING_RISCV)
 
     return __builtin_ceilf(x);
 
-#elif defined(ROUNDING_NEON)
+#elif defined(ROUNDING_SSE4_MSVC) || defined(ROUNDING_NEON_MSVC)
 
-    return vget_lane_f32(vrndp_f32(vdup_n_f32(x)), 0);
-
-#elif defined(ROUNDING_SSE4)
-
-    __m128 y = _mm_set_ss(x);
-    y = _mm_round_ss(_mm_undefined_ps(), y, 2);
-    return _mm_cvtss_f32(y);
-
-#elif defined(ROUNDING_SSE4_MSVC)
-
-    return __round_ss(x, 2);
+    return __ceilf(x);
 
 #elif defined(ROUNDING_SSE2)
 
@@ -269,29 +247,30 @@ float FloatCeil(float x)
 
 float FloatRound(float x)
 {
-#if defined(ROUNDING_WASM)
+#if defined(ROUNDING_WASM) || defined(ROUNDING_SSE4)
 
+    // __builtin_roundf on wasm or gcc/sse4 generates call to roundf()
     const float kHalfMinusOne = 0x1.fffffep-2f;
 
     x += __builtin_copysignf(kHalfMinusOne, x);
     return __builtin_truncf(x);
 
-#elif defined(ROUNDING_NEON)
+#elif defined(ROUNDING_NEON) || defined(ROUNDING_RISCV)
 
+    return __builtin_roundf(x);
+
+#elif defined(ROUNDING_NEON_MSVC)
+    
+    // __roundf on msvc/arm64 generates call to roundf()
     return vget_lane_f32(vrnda_f32(vdup_n_f32(x)), 0);
 
-#elif defined(ROUNDING_SSE4) || defined(ROUNDING_SSE4_MSVC)
+#elif defined(ROUNDING_SSE4_MSVC)
 
-    const __m128 kHalfMinusOne = _mm_set_ss(0x1.fffffep-2f);
-    const __m128 kSignBit = _mm_set_ss(-0.f);
+    // __roundf on msvc/x64 generates call to roundf()
+    const float kHalfMinusOne = 0x1.fffffep-2f;
 
-    __m128 vx = _mm_set_ss(x);
-    __m128 vy = vx;
-
-    vy = _mm_add_ss(vy, _mm_or_ps(_mm_and_ps(vx, kSignBit), kHalfMinusOne));
-    vy = _mm_round_ss(vy, vy, 3);
-
-    return _mm_cvtss_f32(vy);
+    x += __copysignf(kHalfMinusOne, x);
+    return __truncf(x);
 
 #elif defined(ROUNDING_SSE2)
 
@@ -332,23 +311,18 @@ float FloatRound(float x)
 
 float FloatNearbyInt(float x)
 {
-#if defined(ROUNDING_WASM)
+#if defined(ROUNDING_WASM) || defined(ROUNDING_SSE4) || defined(ROUNDING_NEON) || defined(ROUNDING_RISCV)
 
     return __builtin_nearbyintf(x);
 
-#elif defined(ROUNDING_NEON)
-
-    return vget_lane_f32(vrndi_f32(vdup_n_f32(x)), 0);
-
-#elif defined(ROUNDING_SSE4)
-
-    __m128 y = _mm_set_ss(x);
-    y = _mm_round_ss(_mm_undefined_ps(), y, 0);
-    return _mm_cvtss_f32(y);
-
 #elif defined(ROUNDING_SSE4_MSVC)
 
-    return __round_ss(x, 0);
+    return __nearbyintf(x);
+
+#elif defined(ROUNDING_NEON_MSVC)
+
+    // no __nearbyintf exists on msvc/arm64
+    return vget_lane_f32(vrndi_f32(vdup_n_f32(x)), 0);
 
 #elif defined(ROUNDING_SSE2)
 
