@@ -122,10 +122,12 @@ if "%OS%" equ "windows" (
   if "%CC%" equ "gcc"   set BUILD=!TARGET!-%GCC% !BUILD!
   if "%CC%" equ "clang" set BUILD=%CLANG% -fuse-ld=lld -target !TARGET! !BUILD!
 
+  if "%ARCH%" equ "rv64" set BUILD=!BUILD! -march=rv64gcv_zba_zbb_zbs_zfa
+
   set RUN=
   if "%ARCH%" neq "%HOST_ARCH%" (
     set RUN=qemu-!ARCH_VALUE!-static
-    if "%ARCH%" equ "rv64" set RUN=!RUN! -cpu rv64,v=true,vlen=128,elen=64,vext_spec=v1.0,rvv_ta_all_1s=true,rvv_ma_all_1s=true
+    if "%ARCH%" equ "rv64" set RUN=!RUN! -cpu rv64,v=true,zba=true,zbb=true,zbs=true,zfa=true,vlen=128,elen=64,vext_spec=v1.0,rvv_ta_all_1s=true,rvv_ma_all_1s=true
     %WSL% bash -ic "qemu-!ARCH_VALUE!-static --version | head -1" || exit / b1
   ) else if "%SDE%" neq "" (
     %WSL% bash -ic "sde64 -version | head -1" || exit /b 1
