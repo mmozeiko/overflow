@@ -28,7 +28,7 @@ if "%PROCESSOR_ARCHITECTURE%" equ "ARM64" set HOST_ARCH=arm64
 
 set CL_FLAGS=-O2 -W3 -WX
 
-set CFLAGS=-O2 -Wall -Wextra -Werror -ffp-contract=off
+set CFLAGS=-O2 -Wall -Wextra -Werror -ffp-contract=off -fno-lax-vector-conversions
 set LDFLAGS=-static -lm
 
 set CLANG_ARCH_arm64=arm64
@@ -91,6 +91,8 @@ if "%CC%" equ "msvc" (
 )
 set BUILD=!BUILD! !NAME!
 
+for %%a in (%ARGS%) do if "%%a" equ "norun" set NORUN=1
+
 if "%OS%" equ "windows" (
 
   if "%CC%" equ "msvc" (
@@ -100,8 +102,6 @@ if "%OS%" equ "windows" (
     %CLANG%.exe --version | findstr version
   )
   set RUN=%OUTPUT%
-
-  for %%a in (%ARGS%) do if "%%a" equ "norun" set NORUN=1
 
   rem cannot run arm64 on x64
   if "%ARCH%_%PROCESSOR_ARCHITECTURE%" equ "arm64_AMD64" set NORUN=1
@@ -122,7 +122,7 @@ if "%OS%" equ "windows" (
   if "%CC%" equ "gcc"   set BUILD=!TARGET!-%GCC% !BUILD!
   if "%CC%" equ "clang" set BUILD=%CLANG% -fuse-ld=lld -target !TARGET! !BUILD!
 
-  if "%ARCH%" equ "rv64" set BUILD=!BUILD! -march=rv64gcv_zba_zbb_zbs_zfa
+  if "%ARCH%" equ "rv64" set BUILD=!BUILD! -march=rv64gcv_zba_zbb_zbs
 
   set RUN=
   if "%ARCH%" neq "%HOST_ARCH%" (
@@ -136,7 +136,7 @@ if "%OS%" equ "windows" (
 
   for /f "tokens=1 delims= " %%a in ("!BUILD!") do %WSL% bash -ic "%%a --version | head -1" || exit /b 1
 
-  set BUILD=%WSL% !BUILD! !LDFLAGS! -o %OUTPUT%
+  set BUILD=%WSL% bash -ic "!BUILD! !LDFLAGS! -o %OUTPUT%"
   set RUN=%WSL% bash -ic "!RUN! ./%OUTPUT%"
 
 ) else if "%OS%" equ "mingw" (
@@ -146,7 +146,7 @@ if "%OS%" equ "windows" (
 
   for /f "tokens=1 delims= " %%a in ("!BUILD!") do %WSL% bash -ic "%%a --version | head -1" || exit /b 1
 
-  set BUILD=%WSL% !BUILD! !LDFLAGS! -o %OUTPUT%
+  set BUILD=%WSL% bash -ic "!BUILD! !LDFLAGS! -o %OUTPUT%"
   set RUN=%OUTPUT%
 
   if "%SDE%" neq "" (
@@ -156,11 +156,11 @@ if "%OS%" equ "windows" (
 
 ) else if "%OS%" equ "wasi" (
 
-  %WSL% bash -c "wasmtime --version" || exit /b 1
+  %WSL% bash -ic "wasmtime --version" || exit /b 1
   for /f "tokens=1 delims= " %%a in ("!BUILD!") do %WSL% bash -ic "%CLANG% --version | head -1" || exit /b 1
 
-  set BUILD=%WSL% %CLANG% -mbulk-memory -msimd128 -fuse-ld=lld -target wasm32-wasi !BUILD! !LDFLAGS! -o %OUTPUT%
-  set RUN=%WSL% wasmtime %OUTPUT%
+  set BUILD=%WSL% bash -ic "%CLANG% -mbulk-memory -msimd128 -fuse-ld=lld -target wasm32-wasi !BUILD! !LDFLAGS! -o %OUTPUT%"
+  set RUN=%WSL% bash -ic "wasmtime %OUTPUT%"
 
 )
 

@@ -29,7 +29,7 @@ set -euo pipefail
 declare INPUT=${1}; shift
 declare ARGS=($@)
           
-declare CFLAGS=("-O2 -Wall -Wextra -Werror -ffp-contract=off")
+declare CFLAGS=("-O2 -Wall -Wextra -Werror -ffp-contract=off -fno-lax-vector-conversions")
 declare LDFLAGS=("-lm")
 
 declare OS_VALUES=("linux macos mingw wasi")
@@ -85,13 +85,13 @@ function xrun()
     [[ ${CC} == "gcc"   ]] && BUILD+=("${TARGET}-${GCC:-gcc}")
     [[ ${CC} == "clang" ]] && BUILD+=("${CLANG:-clang} -fuse-ld=lld -target ${TARGET}")
 
-    [[ ${ARCH} == "rv64"  ]] && BUILD+=("-march=rv64gcv_zba_zbb_zbs_zfa")
+    [[ ${ARCH} == "rv64"  ]] && BUILD+=("-march=rv64gcv_zba_zbb_zbs")
 
     if [[ ${ARCH} != ${HOST_ARCH} ]]; then
       [[ ${DISTRIB_ID:-} == "Arch" ]] && BUILD+=("--sysroot=/usr/${TARGET}")
       BUILD+=("-static")
       RUN+=("qemu-${ARCH_VALUE}-static")
-      [[ ${ARCH} == "rv64" ]] && RUN+=("-cpu rv64,v=true,zba=true,zbb=true,zbs=true,zfa=true,vlen=128,elen=64,vext_spec=v1.0,rvv_ta_all_1s=true,rvv_ma_all_1s=true")
+      [[ ${ARCH} == "rv64" ]] && RUN+=("-cpu rv64,v=true,zba=true,zbb=true,zbs=true,vlen=128,elen=64,vext_spec=v1.0,rvv_ta_all_1s=true,rvv_ma_all_1s=true")
       qemu-${ARCH_VALUE}-static --version | head -1
     elif [[ ${SDE:-} != "" ]]; then
       RUN+=("sde64" "${SDE}" "--")
