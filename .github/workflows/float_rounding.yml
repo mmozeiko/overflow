@@ -35,7 +35,7 @@ jobs:
 
     steps:
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - if: ${{ matrix.os == 'linux' && matrix.arch == 'arm64' }}
         run: sudo apt update && sudo apt install --no-install-recommends g++-aarch64-linux-gnu

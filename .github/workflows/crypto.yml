@@ -33,10 +33,10 @@ jobs:
 
     steps:
 
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - id: crypto-test-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: crypto/utils/generated/*.h
           key: crypto-test-cache
