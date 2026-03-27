@@ -322,7 +322,7 @@ float FloatNearbyInt(float x)
 #elif defined(ROUNDING_NEON_MSVC)
 
     // no __nearbyintf exists on msvc/arm64
-    return vget_lane_f32(vrndi_f32(vdup_n_f32(x)), 0);
+    return vrndns_f32(x);
 
 #elif defined(ROUNDING_SSE2)
 
