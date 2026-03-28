@@ -31,14 +31,14 @@ static inline float FloatFloor(float x);
 //  3.5 ->  4.0
 static inline float FloatCeil(float x);
 
-// roundf() - round towards nearest integer with halfway cases away from zero
+// roundf() - round towards nearest integer with halfway cases away from zero (commercial rounding)
 // -3.5 -> -4.0
 // -2.5 -> -3.0
 //  2.5 ->  3.0
 //  3.5 ->  4.0
 static inline float FloatRound(float x);
 
-// nearbyintf() - round towards nearest integer with halfway cases to even value
+// nearbyintf() - round towards nearest integer with halfway cases to even value (bankers' rounding)
 // -3.5 -> -4.0
 // -2.5 -> -2.0
 //  2.5 ->  2.0
@@ -110,10 +110,14 @@ float FloatTrunc(float x)
     const __m128 kSignBit = _mm_set_ss(-0.f);
 
     __m128 vx = _mm_set_ss(x);
+
+    // absolute value
     __m128 va = _mm_andnot_ps(kSignBit, vx);
 
-    // truncate to integer and restore sign
+    // truncate to integer value
     __m128 vy = _mm_cvtepi32_ps(_mm_cvttps_epi32(va));
+
+    // restore sign
     vy = _mm_or_ps(_mm_and_ps(kSignBit, vx), vy);
 
     // choose original value if there's no fraction, otherwise truncated value
@@ -126,7 +130,11 @@ float FloatTrunc(float x)
 
     const float kNoFraction = 0x1p+23f;
 
+    // absolute value of input
     float a = ROUNDING_ABS(x);
+
+    // if value is "small" then truncate it to integer via casting (no UB because value is small)
+    // otherwise leave original value - it does not have fractional bits (because value is large)
     float y = (a < kNoFraction) ? ROUNDING_COPYSIGN((float)(int)a, x) : x;
 
     return y;
@@ -150,10 +158,14 @@ float FloatFloor(float x)
     const __m128 kSignBit = _mm_set_ss(-0.f);
 
     __m128 vx = _mm_set_ss(x);
+
+    // absolute value
     __m128 va = _mm_andnot_ps(kSignBit, vx);
 
-    // truncate to integer and restore sign
+    // truncate to integer value
     __m128 vy = _mm_cvtepi32_ps(_mm_cvttps_epi32(vx));
+
+    // restore sign
     vy = _mm_or_ps(_mm_and_ps(kSignBit, vx), vy);
 
     // choose original value if there's no fraction, otherwise truncated value
@@ -169,9 +181,15 @@ float FloatFloor(float x)
 
     const float kNoFraction = 0x1p+23f;
 
+    // absolute value
     float a = ROUNDING_ABS(x);
+
+    // if value is "small" then truncate it to integer via casting (no UB because value is small)
+    // otherwise leave original value - it does not have fractional bits (because value is large)
     float y = (a < kNoFraction) ? ROUNDING_COPYSIGN((float)(int)a, x) : x;
 
+    // if original value x is smaller than y that means value was negative and it was not a whole
+    // number and was truncated towards zero, thus need to subtract 1 to get floored result
     y -= (x < y) ? 1.f : 0.f;
 
     return y;
@@ -195,17 +213,21 @@ float FloatCeil(float x)
     const __m128 kSignBit = _mm_set_ss(-0.f);
 
     __m128 vx = _mm_set_ss(x);
+
+    // absolute value
     __m128 va = _mm_andnot_ps(kSignBit, vx);
 
-    // truncate to integer and restore sign
+    // truncate to integer
     __m128 vy = _mm_cvtepi32_ps(_mm_cvttps_epi32(vx));
+
+    // restore sign
     vy = _mm_or_ps(_mm_and_ps(kSignBit, vx), vy);
 
     // choose original value if there's no fraction, otherwise truncated value
     __m128 mask = _mm_cmplt_ss(va, kNoFraction);
     vy = _mm_or_ps(_mm_andnot_ps(mask, vx), _mm_and_ps(mask, vy));
 
-    // subtract -1 for positive values, funny way of adding 1, but preserves negative 0 result
+    // subtract -1 for positive values
     vy = _mm_sub_ss(vy, _mm_and_ps(_mm_cmpgt_ss(vx, vy), _mm_set_ss(-1.f)));
 
     return _mm_cvtss_f32(vy);
@@ -214,9 +236,16 @@ float FloatCeil(float x)
 
     const float kNoFraction = 0x1p+23f;
 
+    // absolute value
     float a = ROUNDING_ABS(x);
+
+    // if value is "small" then truncate it to integer via casting (no UB because value is small)
+    // otherwise leave original value - it does not have fractional bits (because value is large)
     float y = (a < kNoFraction) ? ROUNDING_COPYSIGN((float)(int)a, x) : x;
 
+    // if original value x is larger than y that means value was negative and it was not a whole
+    // number and was truncated towards zero, thus need to add 1 to get floored result
+    // the addition is done by subtracting -1 to preserve negative 0 result
     y -= (x > y) ? -1.f : 0.f;
 
     return y;
@@ -258,14 +287,18 @@ float FloatRound(float x)
     const __m128 kSignBit = _mm_set_ss(-0.f);
 
     __m128 vx = _mm_set_ss(x);
+
+    // abssolute value
     __m128 va = _mm_andnot_ps(kSignBit, vx);
     __m128 vy = va;
 
-    // add 0.5 minus 1 ulp
+    // add special value
     vy = _mm_add_ss(vy, kHalfMinusOne);
 
-    // truncate to integer and restore sign
+    // truncate to integer value
     vy = _mm_cvtepi32_ps(_mm_cvttps_epi32(vy));
+
+    // restore sign
     vy = _mm_or_ps(vy, _mm_and_ps(kSignBit, vx));
 
     // choose original value if there's no fraction, otherwise truncated value
@@ -276,10 +309,20 @@ float FloatRound(float x)
 
 #else
 
-    const float kNoFraction = 0x1p+23f;
-    const float kHalfMinusOne = 0x1.fffffep-2f;
+    // rounding to nearest integer will be done by truncation
+    // but before trunction kHalfMinusOne will be added
+    // this means anything with fraction >= 0.5 will overflow to next integer
+    // everything else with fraction < 0.5 will stay on current integer
+    // thus implementing rounding half-way cases away from zero
 
+    const float kNoFraction = 0x1p+23f;
+    const float kHalfMinusOne = 0x1.fffffep-2f; // 0.5 minus 1 ulp
+
+    // absolute value
     float a = ROUNDING_ABS(x);
+
+    // if value is "small" then add special constant and truncate to integer via casting
+    // otherwise leave original value - it does not have fractional bits (because value is large)
     float y = (a < kNoFraction) ? ROUNDING_COPYSIGN((float)(int)(a + kHalfMinusOne), x) : x;
 
     return y;
@@ -308,10 +351,12 @@ float FloatNearbyInt(float x)
     const __m128 kSignBit = _mm_set_ss(-0.f);
 
     __m128 vx = _mm_set_ss(x);
+
+    // absolute value
     __m128 va = _mm_andnot_ps(kSignBit, vx);
     __m128 vy = va;
 
-    // force rounding to nearest integer with halfway cases to even value (default rounding mode)
+    // force rounding to nearest integer
     vy = _mm_add_ss(vy, kNoFraction);
     vy = _mm_sub_ss(vy, kNoFraction);
 
@@ -328,13 +373,19 @@ float FloatNearbyInt(float x)
 
     const float kNoFraction = 0x1p+23f;
 
+    // absolute value
     float a = ROUNDING_ABS(x);
     float y = a;
 
+    // force rounding to nearest integer
+    // half-way cases will get rounded to even value, which is default rounding mode
     y += kNoFraction;
     y -= kNoFraction;
+
+    // restore sign
     y = ROUNDING_COPYSIGN(y, x);
 
+    // choose rounded value if there was fraction possible, otherwise leave original value
     y = (a < kNoFraction) ? y : x;
 
     return y;
