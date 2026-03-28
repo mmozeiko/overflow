@@ -40,8 +40,11 @@
 
 int main()
 {
-
-#if defined(ROUNDING_QUICK)
+#if defined(QUICK_TEST)
+    const int quick_test = 1;
+#else
+    const int quick_test = 0;
+#endif
 
     // quick sanity checks
     float quick[] =
@@ -89,7 +92,10 @@ int main()
 
     printf("OK!\n");
 
-#else
+    if (quick_test)
+    {
+        return 0;
+    }
 
     unsigned int x = 0;
     do
@@ -116,7 +122,4 @@ int main()
     while (x != 0);
 
     printf("100%% OK!\n");
-
-#endif // defined(ROUNDING_QUICK)
-
 }

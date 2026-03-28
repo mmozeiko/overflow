@@ -49,23 +49,27 @@ jobs:
       - if: ${{ matrix.os == 'wasi' }}
         run: |
           sudo apt update && sudo apt install --no-install-recommends lld wasi-libc libclang-rt-dev-wasm32
-          curl -sfL https://github.com/bytecodealliance/wasmtime/releases/download/v36.0.1/wasmtime-v36.0.1-$(uname -m)-linux.tar.xz | tar xJ --strip-components=1 wasmtime-v36.0.1-$(uname -m)-linux/wasmtime
+          curl -sfL https://github.com/bytecodealliance/wasmtime/releases/download/v43.0.0/wasmtime-v43.0.0-$(uname -m)-linux.tar.xz | tar xJ --strip-components=1 wasmtime-v43.0.0-$(uname -m)-linux/wasmtime
           sudo mv wasmtime /usr/local/bin/
 
       - if: ${{ matrix.os == 'windows' }}
         shell: cmd
         run: |
-          call scripts\xrun.cmd float_rounding\float_rounding_test.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" -DROUNDING_QUICK c++ norun || exit /b 1
-          call scripts\xrun.cmd float_rounding\float_rounding_test.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" -DROUNDING_QUICK c         || exit /b 1
-          if "${{ matrix.arch }}" equ "x64" (
-            call scripts\xrun.cmd float_rounding\float_rounding_test.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" -DROUNDING_QUICK c sse4  || exit /b 1
-          )
+          call scripts\xrun.cmd float_rounding\float_rounding_test.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" -DQUICK_TEST c++ norun
+          call scripts\xrun.cmd float_rounding\float_rounding_test.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" -DQUICK_TEST c
+
+      - if: ${{ matrix.os == 'windows' && matrix.arch == 'x64' }}
+        shell: cmd
+        run: |
+          call scripts\xrun.cmd float_rounding\float_rounding_test.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" -DQUICK_TEST c sse4
 
       - if: ${{ matrix.os != 'windows' }}
         shell: bash
         run: |
-          scripts/xrun.sh float_rounding/float_rounding_test.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" -DROUNDING_QUICK c++ norun
-          scripts/xrun.sh float_rounding/float_rounding_test.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" -DROUNDING_QUICK c
-          if [[ "${{ matrix.arch }}" == "x64" ]]; then
-            scripts/xrun.sh float_rounding/float_rounding_test.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" -DROUNDING_QUICK c sse4
-          fi
+          scripts/xrun.sh float_rounding/float_rounding_test.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" -DQUICK_TEST c++ norun
+          scripts/xrun.sh float_rounding/float_rounding_test.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" -DQUICK_TEST c
+
+      - if: ${{ matrix.os != 'windows' && matrix.arch == 'x64' }}
+        shell: bash
+        run: |
+          scripts/xrun.sh float_rounding/float_rounding_test.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" -DQUICK_TEST c sse4
