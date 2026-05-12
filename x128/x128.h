@@ -901,6 +901,8 @@ static inline uint64_t x128__reciprocal_3by2(x128 d)
 
     // d must have top bit set
 
+#if 0 // reference code written like in a paper
+
     X128_TEST_MARKER(0)
 
     uint64_t v = x128__reciprocal_2by1(d.hi);                         // (1)
@@ -908,39 +910,58 @@ static inline uint64_t x128__reciprocal_3by2(x128 d)
     uint64_t p = d.hi * v;                                            // (2)
     p += d.lo;                                                        // (3)
 
-    int cmp1 = (p < d.lo) & (p >= d.hi);                              // (4) and (6)
     if (p < d.lo)                                                     // (4)
     {
         X128_TEST_MARKER(1)
-    }
-    {
-        v -= (p < d.lo);                                              // (5)
-        if (cmp1)                                                     // (6)
+        v -= 1;                                                       // (5)
+
+        if (p >= d.hi)                                                // (6)
         {
             X128_TEST_MARKER(2)
+            v -= 1;                                                   // (7)
+            p -= d.hi;                                                // (8)
         }
-        v -= cmp1;                                                    // (7)
-        p -= cmp1 ? d.hi : 0;                                         // (8)
         p -= d.hi;                                                    // (9)
     }
 
     x128 t = x128_mul_64x64(v, d.lo);                                 // (10)
     p += t.hi;                                                        // (11)
 
-    int cmp2 = (p < t.hi) & (x128_cmp_u(x128_make(t.lo, p), d) >= 0); // (12) and (14)
     if (p < t.hi)                                                     // (12)
     {
         X128_TEST_MARKER(3)
-    }
-    {
-        X128_TEST_MARKER(3)
-        v -= (p < t.hi);                                              // (13)
-        if (cmp2)                                                     // (14)
+        v -= 1;                                                       // (13)
+
+        if (x128_cmp_u(x128_make(t.lo, p), d) >= 0)                   // (14)
         {
             X128_TEST_MARKER(4)
+            v -= 1;                                                   // (15)
         }
-        v -= cmp2;                                                    // (15)
     }
+
+#else // branchless code for msvc & clang
+
+    uint64_t v = x128__reciprocal_2by1(d.hi);                         // (1)
+
+    uint64_t p = d.hi * v;                                            // (2)
+    p += d.lo;                                                        // (3)
+
+    int cmp1 = (p < d.lo) & (p >= d.hi);                              // (4) and (6)
+
+    v -= (p < d.lo);                                                  // (5)
+    v -= cmp1;                                                        // (7)
+    p -= cmp1 ? d.hi : 0;                                             // (8)
+    p -= d.hi;                                                        // (9)
+
+    x128 t = x128_mul_64x64(v, d.lo);                                 // (10)
+    p += t.hi;                                                        // (11)
+
+    int cmp2 = (p < t.hi) & (x128_cmp_u(x128_make(t.lo, p), d) >= 0); // (12) and (14)
+
+    v -= (p < t.hi);                                                  // (13)
+    v -= cmp2;                                                        // (15)
+
+#endif
 
     return v;
 }
@@ -949,6 +970,8 @@ static inline uint64_t x128__div_2by1(uint64_t u0, uint64_t u1, uint64_t d, uint
 {
     // Algorithm 4 from "Improved division by invariant integers"
     // https://gmplib.org/~tege/division-paper.pdf
+
+#if 0 // reference code written like in a paper
 
     X128_TEST_MARKER(5)
     
@@ -963,9 +986,8 @@ static inline uint64_t x128__div_2by1(uint64_t u0, uint64_t u1, uint64_t d, uint
     {
         X128_TEST_MARKER(6)
         q.hi -= 1;                      // (6)
+        r += d;                         // (7)
     }
-    // having this outside of "if" generates branchless code on MSVC
-    r += (r > q.lo) ? d : 0;            // (7)
 
     if (r >= d)                         // (8)
     {
@@ -973,6 +995,25 @@ static inline uint64_t x128__div_2by1(uint64_t u0, uint64_t u1, uint64_t d, uint
         q.hi += 1;                      // (9)
         r -= d;                         // (10)
     }
+
+#else // branchless code for msvc & clang
+
+    x128 q = x128_mul_64x64(v, u1);     // (1)
+    q = x128_add(q, x128_make(u0, u1)); // (2)
+
+    q.hi += 1;                          // (3)
+
+    uint64_t r = u0 - (q.hi * d);       // (4)
+
+    int cmp1 = (r > q.lo);              // (5)
+    q.hi -= cmp1;                       // (6)
+    r += cmp1 ? d : 0;                  // (7)
+
+    int cmp2 = (r >= d);                // (8)
+    q.hi += cmp2;                       // (9)
+    r -= cmp2 ? d : 0;                  // (10)
+
+#endif
 
     *rem = r;
     return q.hi;
@@ -982,6 +1023,8 @@ static inline uint64_t x128__div_3by2(uint64_t u0, uint64_t u1, uint64_t u2, x12
 {
     // Algorithm 5 from "Improved division by invariant integers"
     // https://gmplib.org/~tege/division-paper.pdf
+
+#if 0 // reference code written like in a paper
 
     X128_TEST_MARKER(8)
 
@@ -995,26 +1038,45 @@ static inline uint64_t x128__div_3by2(uint64_t u0, uint64_t u1, uint64_t u2, x12
 
     q.hi += 1;                                            // (6)
 
-    x128 rd = x128_add(r, d);                             // (9)
-    int cmp1 = (r.hi >= q.lo);
-    if (cmp1)                                             // (7)
+    if (r.hi >= q.lo)                                     // (7)
     {
         X128_TEST_MARKER(9)
+        q.hi -= 1;                                         // (8)
+        r = x128_add(r, d);                                // (9)
     }
+
+    if (x128_cmp_u(r, d) >= 0)                             // (10)
+    {
+        X128_TEST_MARKER(10)
+        q.hi += 1;                                         // (11)
+        r = x128_sub(r, d);                                // (12)
+    }
+
+#else // branchless code for msvc & clang
+
+    x128 q = x128_mul_64x64(v, u2);                       // (1)
+    q = x128_add(q, x128_make(u1, u2));                   // (2)
+
+    uint64_t r1 = u1 - (q.hi * d.hi);                     // (3)
+
+    x128 t = x128_mul_64x64(d.lo, q.hi);                  // (4)
+    x128 r = x128_sub(x128_sub(x128_make(u0, r1), t), d); // (5)
+
+    q.hi += 1;                                            // (6)
+
+    x128 rd = x128_add(r, d);                             // (9)
+    int cmp1 = (r.hi >= q.lo);                            // (7)
     q.hi -= cmp1;                                         // (8)
-    // writing r assignemnt this way generates branchless code on MSVC
     r.lo = cmp1 ? rd.lo : r.lo;                           // (9)
     r.hi = cmp1 ? rd.hi : r.hi;
 
-    rd = x128_sub(r, d);                                  // (9)
+    rd = x128_sub(r, d);                                  // (12)
     int cmp2 = (x128_cmp_u(r, d) >= 0);                   // (10)
-    if (cmp2)
-    {
-        X128_TEST_MARKER(10)
-    }
     q.hi += cmp2;                                         // (11)
     r.lo = cmp2 ? rd.lo : r.lo;                           // (12)
-    r.hi = cmp2 ? rd.hi : r.hi;
+    r.hi = cmp2 ? rd.hi : r.hi;                           // (12)
+
+#endif
 
     *rem = r;
     return q.hi;
