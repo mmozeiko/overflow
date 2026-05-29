@@ -29,7 +29,7 @@ if "%PROCESSOR_ARCHITECTURE%" equ "ARM64" set HOST_ARCH=arm64
 set CL_FLAGS=-O2 -W3 -WX
 
 set CFLAGS=-O2 -Wall -Wextra -Werror -ffp-contract=off -fno-lax-vector-conversions
-set LDFLAGS=-static -lm
+set LDFLAGS=-lm
 
 set CLANG_ARCH_arm64=arm64
 set CLANG_ARCH_x64=x86_64
@@ -77,6 +77,8 @@ if "%CC%" equ "msvc" (
     if "!X!" equ "c"      set BUILD=!BUILD! -TC
     if "!X!" equ "c++"    set BUILD=!BUILD! -TP
     if "!X!" equ "sse4"   set BUILD=!BUILD! -arch:SSE4.2
+    if "!X!" equ "avx2"   set BUILD=!BUILD! -arch:AVX2
+    if "!X!" equ "avx512" set BUILD=!BUILD! -arch:AVX512
     if "!X:~0,1!" equ "-" set BUILD=!BUILD! %%x
   )
 ) else (
@@ -86,6 +88,9 @@ if "%CC%" equ "msvc" (
     if "!X!" equ "c"      set BUILD=!BUILD! -x c
     if "!X!" equ "c++"    set BUILD=!BUILD! -x c++
     if "!X!" equ "sse4"   set BUILD=!BUILD! -msse4.2
+    if "!X!" equ "avx2"   set BUILD=!BUILD! -mavx2 -mfma
+    if "!X!" equ "avx512" set BUILD=!BUILD! -mavx512f -mavx512cd -mavx512bw -mavx512dq -mavx512vl
+    if "!X!" equ "ubsan"  set BUILD=!BUILD! -fsanitize=undefined
     if "!X:~0,1!" equ "-" set BUILD=!BUILD! %%x
   )
 )
@@ -126,6 +131,7 @@ if "%OS%" equ "windows" (
 
   set RUN=
   if "%ARCH%" neq "%HOST_ARCH%" (
+    set LDFLAGS=!LDFLAGS! -static
     set RUN=qemu-!ARCH_VALUE!-static
     if "%ARCH%" equ "rv64" set RUN=!RUN! -cpu rv64,v=true,zba=true,zbb=true,zbs=true,zfa=true,vlen=128,elen=64,vext_spec=v1.0,rvv_ta_all_1s=true,rvv_ma_all_1s=true
     %WSL% bash -ic "qemu-!ARCH_VALUE!-static --version | head -1" || exit / b1

@@ -4,19 +4,19 @@ set -euo pipefail
 #set -x
 
 # setup on ArchLinux:
-#   sudo pacman -Syu --needed gcc clang lld                                                  # gcc & clang
+#   sudo pacman -Syu --needed gcc clang lld compiler-rt                                      # gcc & clang
 #   sudo pacman -Syu --needed aarch64-linux-gnu-glibc riscv64-linux-gnu-gcc qemu-user-static # arm64 & rv64 + qemu
 #   sudo pacman -Syu --needed mingw-w64-gcc wine                                             # mingw + wine
 #   sudo pacman -Syu --needed wasi-libc wasi-compiler-rt wasmtime                            # wasm + wasi
 
 # setup on Ubuntu 24.04:
-#   sudo apt install --no-install-recommends g++ clang lld                                                # gcc & clang
-#   sudo apt install --no-install-recommends g++-aarch64-linux-gnu g++-riscv64-linux-gnu qemu-user-static # arm64 & rv64 + qemu
-#   sudo apt install --no-install-recommends g++-mingw-w64-x86-64-posix wine                              # mingw + wine
-#   sudo apt install --no-install-recommends wasi-libc libclang-rt-dev-wasm32                             # wasm + wasi
+#   sudo apt install --no-install-recommends g++ clang lld libclang-rt-dev                                 # gcc & clang
+#   sudo apt install --no-install-recommends g++-aarch64-l inux-gnu g++-riscv64-linux-gnu qemu-user-static # arm64 & rv64 + qemu
+#   sudo apt install --no-install-recommends g++-mingw-w64-x86-64-posix wine                               # mingw + wine
+#   sudo apt install --no-install-recommends wasi-libc libclang-rt-dev-wasm32                              # wasm + wasi
 # then get wasmtime binary:
 #   sudo apt install --no-install-recommends curl ca-certificates xz-utils
-#   curl -sfL https://github.com/bytecodealliance/wasmtime/releases/download/v36.0.1/wasmtime-v26.0.1-$(uname -m)-linux.tar.xz | tar xJ --strip-components=1 wasmtime-v36.0.1-$(uname -m)-linux/wasmtime
+#   curl -sfL https://github.com/bytecodealliance/wasmtime/releases/download/v45.0.0/wasmtime-v45.0.0-$(uname -m)-linux.tar.xz | tar xJ --strip-components=1 wasmtime-v45.0.0-$(uname -m)-linux/wasmtime
 #   sudo mv wasmtime /usr/local/bin/
 
 # setup on macOS:
@@ -129,9 +129,12 @@ function xrun()
 
   fi
 
-  arg "c"    && BUILD+=("-x c")
-  arg "c++"  && BUILD+=("-x c++")
-  arg "sse4" && BUILD+=("-msse4.2")
+  arg "c"      && BUILD+=("-x c")
+  arg "c++"    && BUILD+=("-x c++")
+  arg "sse4"   && BUILD+=("-msse4.2")
+  arg "avx2"   && BUILD+=("-mavx2 -mfma")
+  arg "avx512" && BUILD+=("-mavx512f -mavx512cd -mavx512bw -mavx512dq -mavx512vl")
+  arg "ubsan"  && BUILD+=("-fsanitize=undefined")
   BUILD+=(${CFLAGS})
   for x in ${ARGS[@]+"${ARGS[@]}"}; do [[ ${x} == -* ]] && BUILD+=(${x}); done
   BUILD+=(${INPUT})
