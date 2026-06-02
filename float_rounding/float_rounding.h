@@ -106,23 +106,25 @@ float FloatTrunc(float x)
 
 #elif defined(ROUNDING_SSE2)
 
-    const __m128 kNoFraction = _mm_set_ss(0x1p+23f);
-    const __m128 kSignBit = _mm_set_ss(-0.f);
+    // same value as "indefinite integer" = 0x80000000
+    const __m128i kSignBit = _mm_castps_si128(_mm_set_ss(-0.f));
 
     __m128 vx = _mm_set_ss(x);
 
-    // absolute value
-    __m128 va = _mm_andnot_ps(kSignBit, vx);
+    // truncate to integer, and convert integer back to float
+    // in case integer overflows, truncation will produce indefinite integer
+    __m128i vi = _mm_cvttps_epi32(vx);
+    __m128  vy = _mm_cvtepi32_ps(vi);
 
-    // truncate to integer value
-    __m128 vy = _mm_cvtepi32_ps(_mm_cvttps_epi32(va));
+    // compare truncation result to indefinite integer
+    // and always set sign bit on resulting mask, so next operation will handle the case
+    // when input was negative zero, otherwise the cast through integer will produce positive zero
+    __m128 mask = _mm_castsi128_ps(_mm_or_si128(_mm_cmpeq_epi32(vi, kSignBit), kSignBit));
 
-    // restore sign
-    vy = _mm_or_ps(_mm_and_ps(kSignBit, vx), vy);
-
-    // choose original value if there's no fraction, otherwise truncated value
-    __m128 mask = _mm_cmplt_ss(va, kNoFraction);
-    vy = _mm_or_ps(_mm_andnot_ps(mask, vx), _mm_and_ps(mask, vy));
+    // either choose original value if conversion overflowed
+    // which means it was large value without fractional bits
+    // or leave truncated value, but with sign bit of original value
+    vy = _mm_or_ps(_mm_andnot_ps(mask, vy), _mm_and_ps(mask, vx));
 
     return _mm_cvtss_f32(vy);
 
@@ -154,23 +156,25 @@ float FloatFloor(float x)
 
 #elif defined(ROUNDING_SSE2)
 
-    const __m128 kNoFraction = _mm_set_ss(0x1p+23f);
-    const __m128 kSignBit = _mm_set_ss(-0.f);
+    // same value as "indefinite integer" = 0x80000000
+    const __m128i kSignBit = _mm_castps_si128(_mm_set_ss(-0.f));
 
     __m128 vx = _mm_set_ss(x);
 
-    // absolute value
-    __m128 va = _mm_andnot_ps(kSignBit, vx);
+    // truncate to integer, and convert integer back to float
+    // in case integer overflows, truncation will produce indefinite integer
+    __m128i vi = _mm_cvttps_epi32(vx);
+    __m128  vy = _mm_cvtepi32_ps(vi);
 
-    // truncate to integer value
-    __m128 vy = _mm_cvtepi32_ps(_mm_cvttps_epi32(vx));
+    // compare truncation result to indefinite integer
+    // and always set sign bit on resulting mask, so next operation will handle the case
+    // when input was negative zero, otherwise the cast through integer will produce positive zero
+    __m128 mask = _mm_castsi128_ps(_mm_or_si128(_mm_cmpeq_epi32(vi, kSignBit), kSignBit));
 
-    // restore sign
-    vy = _mm_or_ps(_mm_and_ps(kSignBit, vx), vy);
-
-    // choose original value if there's no fraction, otherwise truncated value
-    __m128 mask = _mm_cmplt_ss(va, kNoFraction);
-    vy = _mm_or_ps(_mm_andnot_ps(mask, vx), _mm_and_ps(mask, vy));
+    // either choose original value if conversion overflowed
+    // which means it was large value without fractional bits
+    // or leave truncated value, but with sign bit of original value
+    vy = _mm_or_ps(_mm_andnot_ps(mask, vy), _mm_and_ps(mask, vx));
 
     // subtract 1 for negative values
     vy = _mm_sub_ss(vy, _mm_and_ps(_mm_cmplt_ss(vx, vy), _mm_set_ss(1.f)));
@@ -189,7 +193,7 @@ float FloatFloor(float x)
     float y = (a < kNoFraction) ? ROUNDING_COPYSIGN((float)(int)a, x) : x;
 
     // if original value x is smaller than y that means value was negative and it was not a whole
-    // number and was truncated towards zero, thus need to subtract 1 to get floored result
+    // number and was truncated towards zero, thus need to subtract 1 to get floor result
     y -= (x < y) ? 1.f : 0.f;
 
     return y;
@@ -209,23 +213,25 @@ float FloatCeil(float x)
 
 #elif defined(ROUNDING_SSE2)
 
-    const __m128 kNoFraction = _mm_set_ss(0x1p+23f);
-    const __m128 kSignBit = _mm_set_ss(-0.f);
+    // same value as "indefinite integer" = 0x80000000
+    const __m128i kSignBit = _mm_castps_si128(_mm_set_ss(-0.f));
 
     __m128 vx = _mm_set_ss(x);
 
-    // absolute value
-    __m128 va = _mm_andnot_ps(kSignBit, vx);
+    // truncate to integer, and convert integer back to float
+    // in case integer overflows, truncation will produce indefinite integer
+    __m128i vi = _mm_cvttps_epi32(vx);
+    __m128  vy = _mm_cvtepi32_ps(vi);
 
-    // truncate to integer
-    __m128 vy = _mm_cvtepi32_ps(_mm_cvttps_epi32(vx));
+    // compare truncation result to indefinite integer
+    // and always set sign bit on resulting mask, so next operation will handle the case
+    // when input was negative zero, otherwise the cast through integer will produce positive zero
+    __m128 mask = _mm_castsi128_ps(_mm_or_si128(_mm_cmpeq_epi32(vi, kSignBit), kSignBit));
 
-    // restore sign
-    vy = _mm_or_ps(_mm_and_ps(kSignBit, vx), vy);
-
-    // choose original value if there's no fraction, otherwise truncated value
-    __m128 mask = _mm_cmplt_ss(va, kNoFraction);
-    vy = _mm_or_ps(_mm_andnot_ps(mask, vx), _mm_and_ps(mask, vy));
+    // either choose original value if conversion overflowed
+    // which means it was large value without fractional bits
+    // or leave truncated value, but with sign bit of original value
+    vy = _mm_or_ps(_mm_andnot_ps(mask, vy), _mm_and_ps(mask, vx));
 
     // subtract -1 for positive values
     vy = _mm_sub_ss(vy, _mm_and_ps(_mm_cmpgt_ss(vx, vy), _mm_set_ss(-1.f)));
@@ -244,8 +250,8 @@ float FloatCeil(float x)
     float y = (a < kNoFraction) ? ROUNDING_COPYSIGN((float)(int)a, x) : x;
 
     // if original value x is larger than y that means value was negative and it was not a whole
-    // number and was truncated towards zero, thus need to add 1 to get floored result
-    // the addition is done by subtracting -1 to preserve negative 0 result
+    // number and was truncated towards zero, thus need to add 1 to get ceil result
+    // the addition is done by subtracting -1 to preserve value of negative zero
     y -= (x > y) ? -1.f : 0.f;
 
     return y;
@@ -282,28 +288,34 @@ float FloatRound(float x)
 
 #elif defined(ROUNDING_SSE2)
 
-    const __m128 kNoFraction = _mm_set_ss(0x1p+23f);
     const __m128 kHalfMinusOne = _mm_set_ss(0x1.fffffep-2f);
-    const __m128 kSignBit = _mm_set_ss(-0.f);
+
+    // same value as "indefinite integer" = 0x80000000
+    const __m128i kSignBit = _mm_castps_si128(_mm_set_ss(-0.f));
 
     __m128 vx = _mm_set_ss(x);
 
     // absolute value
-    __m128 va = _mm_andnot_ps(kSignBit, vx);
-    __m128 vy = va;
+    __m128 va = _mm_andnot_ps(_mm_castsi128_ps(kSignBit), vx);
 
     // add special value
-    vy = _mm_add_ss(vy, kHalfMinusOne);
+    __m128 vy = _mm_add_ss(va, kHalfMinusOne);
 
     // truncate to integer value
-    vy = _mm_cvtepi32_ps(_mm_cvttps_epi32(vy));
+    __m128i vi = _mm_cvttps_epi32(vy);
 
-    // restore sign
-    vy = _mm_or_ps(vy, _mm_and_ps(kSignBit, vx));
+    // convert back to float
+    vy = _mm_cvtepi32_ps(vi);
 
-    // choose original value if there's no fraction, otherwise truncated value
-    __m128 mask = _mm_cmplt_ss(va, kNoFraction);
-    vy = _mm_or_ps(_mm_andnot_ps(mask, vx), _mm_and_ps(mask, vy));
+    // compare truncation result to indefinite integer
+    // and always set sign bit on resulting mask, so next operation will always
+    // chose sign bit of original value - because vy contains absolute value
+    __m128 mask = _mm_castsi128_ps(_mm_or_si128(_mm_cmpeq_epi32(vi, kSignBit), kSignBit));
+
+    // either choose original value if conversion overflowed
+    // which means it was large value without fractional bits
+    // or leave truncated value, but with sign bit of original value
+    vy = _mm_or_ps(_mm_andnot_ps(mask, vy), _mm_and_ps(mask, vx));
 
     return _mm_cvtss_f32(vy);
 
@@ -347,7 +359,8 @@ float FloatNearbyInt(float x)
 
 #elif defined(ROUNDING_SSE2)
 
-    const __m128 kSignBit = _mm_set_ss(-0.f);
+    // same value as "indefinite integer" = 0x80000000
+    const __m128i kSignBit = _mm_castps_si128(_mm_set_ss(-0.f));
 
     __m128 vx = _mm_set_ss(x);
 
@@ -356,12 +369,14 @@ float FloatNearbyInt(float x)
     __m128i vi = _mm_cvtps_epi32(vx);
     __m128  vy = _mm_cvtepi32_ps(vi);
 
-    // restore sign, in case input was negative zero
-    vy = _mm_or_ps(vy, _mm_and_ps(vx, kSignBit));
+    // compare rounding result to indefinite integer
+    // and always set sign bit on resulting mask, so next operation will handle the case
+    // when input was negative zero, otherwise the cast through integer will produce positive zero
+    __m128 mask = _mm_castsi128_ps(_mm_or_si128(_mm_cmpeq_epi32(vi, kSignBit), kSignBit));
 
-    // choose original value if rounded value is indefinite integer value (same value as kSignBit)
-    // this means input float was very large and without any fraction
-    __m128 mask = _mm_castsi128_ps(_mm_cmpeq_epi32(vi, _mm_castps_si128(kSignBit)));
+    // either choose original value if conversion overflowed
+    // which means it was large value without fractional bits
+    // or leave rounded value, but with sign bit of original value
     vy = _mm_or_ps(_mm_andnot_ps(mask, vy), _mm_and_ps(mask, vx));
 
     return _mm_cvtss_f32(vy);
