@@ -11,7 +11,7 @@ set -euo pipefail
 
 # setup on Ubuntu 24.04:
 #   sudo apt install --no-install-recommends g++ clang lld libclang-rt-dev                                 # gcc & clang
-#   sudo apt install --no-install-recommends g++-aarch64-l inux-gnu g++-riscv64-linux-gnu qemu-user-static # arm64 & rv64 + qemu
+#   sudo apt install --no-install-recommends g++-aarch64-linux-gnu g++-riscv64-linux-gnu qemu-user-static  # arm64 & rv64 + qemu
 #   sudo apt install --no-install-recommends g++-mingw-w64-x86-64-posix wine                               # mingw + wine
 #   sudo apt install --no-install-recommends wasi-libc libclang-rt-dev-wasm32                              # wasm + wasi
 # then get wasmtime binary:
