@@ -1,0 +1,86 @@
+name: 'shared'
+description: ''
+
+inputs:
+  os:
+    required: true
+  cc:
+    required: true
+  arch:
+    required: true
+
+  wasmtime:
+    default: '45.0.2'
+  sde_version:
+    default: '9.58.0' # 10.x versions have issues on windows: https://community.intel.com/t5/Intel-ISA-Extensions/SDE-10-8-fails-to-start-depending-on-the-installation-folder/m-p/1747074
+  sde_version_full:
+    default: '9.58.0-2025-06-16'
+  sde_sha256_linux:
+    default: 'f849acecad4c9b108259c643b2688fd65c35723cd23368abe5dd64b917cc18c0'
+  sde_sha256_windows:
+    default: 'ebb8b3b63fcb0b6c1f9721118ba4883703d2aed9e0db2defed4e44fba78d9ca9'
+
+runs:
+  using: "composite"
+
+  steps:
+
+    - name: linux/x64 dependencies
+      if: ${{ inputs.os == 'linux' && inputs.arch == 'x64' }}
+      shell: bash
+      run: sudo apt update && sudo apt install --no-install-recommends clang-22 lld-22 g++-16
+
+    - name: linux/arm64 dependencies
+      if: ${{ inputs.os == 'linux' && inputs.arch == 'arm64' }}
+      shell: bash
+      run: sudo apt update && sudo apt install --no-install-recommends clang-22 lld-22 g++-16-aarch64-linux-gnu
+
+    - name: linux/rv64 dependencies
+      if: ${{ inputs.os == 'linux' && inputs.arch == 'rv64' }}
+      shell: bash
+      run: sudo apt update && sudo apt install --no-install-recommends clang-22 lld-22 g++-16-riscv64-linux-gnu qemu-user
+
+    - name: mingw dependencies
+      if: ${{ inputs.os == 'mingw' }}
+      shell: bash
+      run: sudo apt update && sudo apt install --no-install-recommends clang-22 lld-22 g++-mingw-w64-x86-64 wine
+
+    - name: wasm dependencies
+      if: ${{ inputs.os == 'wasi' }}
+      shell: bash
+      run: |
+        sudo apt update && sudo apt install --no-install-recommends clang-22 lld-22 wasi-libc libclang-rt-22-dev-wasm32
+        curl -sfL https://github.com/bytecodealliance/wasmtime/releases/download/v${{ inputs.wasmtime }}/wasmtime-v${{ inputs.wasmtime }}-$(uname -m)-linux.tar.xz | sudo tar xJ --strip-components=1 -C /usr/local/bin/ wasmtime-v${{ inputs.wasmtime }}-$(uname -m)-linux/wasmtime
+        sudo mkdir /usr/lib/llvm-22/lib/clang/22/lib/wasm32-unknown-wasip1
+        sudo ln -sf /usr/lib/llvm-22/lib/clang/22/lib/wasi/libclang_rt.builtins-wasm32.a /usr/lib/llvm-22/lib/clang/22/lib/wasm32-unknown-wasip1/libclang_rt.builtins.a
+
+    - id: sde-cache
+      if: ${{ (inputs.os == 'windows' || inputs.os == 'linux') && inputs.arch == 'x64' }}
+      uses: actions/cache@v5
+      with:
+        path: sde
+        key: sde-${{ inputs.sde_version }}-${{ inputs.os }}
+        enableCrossOsArchive: true
+
+    - name: SDE on windows/x64
+      if: ${{ inputs.os == 'windows' && inputs.arch == 'x64' && steps.sde-cache.outputs.cache-hit != 'true' }}
+      shell: cmd
+      run: |
+        curl.exe -sfLO https://github.com/BasedInc/sde/releases/download/v${{ inputs.sde_version }}/sde-external-${{ inputs.sde_version_full }}-win.tar.xz || exit /b
+        for /f "tokens=*" %%s in ('certutil.exe -hashfile "sde-external-${{ inputs.sde_version_full }}-win.tar.xz" sha256 ^| findstr /v hash') do (
+          if "%%s" neq "${{ inputs.sde_sha256_windows }}" (
+            echo SHA256 hash mismatch for SDE windows archive
+            exit /b
+          )
+        )
+        tar.exe -xJf sde-external-${{ inputs.sde_version_full }}-win.tar.xz
+        ren sde-external-${{ inputs.sde_version_full }}-win sde
+
+    - name: SDE on linux/x64
+      if: ${{ inputs.os == 'linux' && inputs.arch == 'x64' && steps.sde-cache.outputs.cache-hit != 'true' }}
+      shell: bash
+      run: |
+        curl -sfLO https://github.com/BasedInc/sde/releases/download/v${{ inputs.sde_version }}/sde-external-${{ inputs.sde_version_full }}-lin.tar.xz
+        sha256sum -c <(echo "${{ inputs.sde_sha256_linux }} sde-external-${{ inputs.sde_version_full }}-lin.tar.xz")
+        tar -xJf sde-external-${{ inputs.sde_version_full }}-lin.tar.xz
+        mv sde-external-${{ inputs.sde_version_full }}-lin sde

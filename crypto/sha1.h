@@ -100,6 +100,13 @@ static inline void sha1_finish(sha1_ctx* ctx, uint8_t digest[SHA1_DIGEST_SIZE]);
 #   define SHA1_CPUID_EX(x, y, info) __cpuidex(info, x, y)
 #endif
 
+// workaround for issue with older clang -fno-lax-vector-conversions
+#if defined(__clang__)
+#   define SHA1_CLANG_CAST (__m128i)
+#else
+#   define SHA1_CLANG_CAST
+#endif
+
 #define SHA1_CPUID_INIT  (1 << 0)
 #define SHA1_CPUID_SHANI (1 << 1)
 
@@ -190,7 +197,7 @@ static void sha1_process_shani(uint32_t* state, const uint8_t* block, size_t cou
         if (i == 0) tmp = _mm_add_epi32      (s1, m0);        \
         if (i != 0) tmp = _mm_sha1nexte_epu32(s1, m0);        \
         /* 4 round functions */                               \
-        s1 = _mm_sha1rnds4_epu32(s0, tmp, i/5);               \
+        s1 = SHA1_CLANG_CAST _mm_sha1rnds4_epu32(s0, tmp, i/5); \
     } while(0)
 
     const __m128i* buffer = (const __m128i*)block;

@@ -76,7 +76,7 @@ int main()
         -INFINITY,
     };
 
-    for (volatile size_t i=0; i<sizeof(quick)/sizeof(quick[0]); i++)
+    for (volatile size_t i=0; i<sizeof(quick)/sizeof(quick[0]); i+=1)
     {
         float xf = quick[i];
 

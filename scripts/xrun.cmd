@@ -4,7 +4,7 @@ setlocal enabledelayedexpansion
 rem For msvc have Visual Studio with desktop development C++ workload installed.
 rem For clang have clang.exe available in path.
 
-rem For linux/mingw/wasm builds have WSL with Ubuntu 24.04 installed: https://learn.microsoft.com/en-us/windows/wsl/install
+rem For linux/mingw/wasm builds have WSL with Ubuntu 26.04 installed: https://learn.microsoft.com/en-us/windows/wsl/install
 rem Then install packages listed in xrun.sh file
 
 set NAME=%1 && shift
@@ -16,12 +16,23 @@ if "%VS%" equ "" (
   exit /b 1
 )
 set VSDEVCMD=%VS%\Common7\Tools\VsDevCmd.bat
-set WSL_DISTRO=Ubuntu-24.04
+set WSL_DISTRO=Ubuntu-26.04
 
 set WSL=wsl.exe -d %WSL_DISTRO%
+set WSL_CLANG=clang-22
+set WSL_GCC=gcc-16
 
-if "%CLANG%" equ "" set CLANG=clang
-if "%GCC%"   equ "" set GCC=gcc
+if not defined CLANG (
+  set CLANG=clang
+) else (
+  set WSL_CLANG=%CLANG%
+)
+
+if not defined GCC (
+  set GCC=gcc
+) else (
+  set WSL_GCC=%GCC%
+)
 
 if "%PROCESSOR_ARCHITECTURE%" equ "AMD64" set HOST_ARCH=x64
 if "%PROCESSOR_ARCHITECTURE%" equ "ARM64" set HOST_ARCH=arm64
@@ -124,17 +135,17 @@ if "%OS%" equ "windows" (
   if "%ARCH%" equ "arm64" set ARCH_VALUE=aarch64
 
   set TARGET="!ARCH_VALUE!-linux-gnu"
-  if "%CC%" equ "gcc"   set BUILD=!TARGET!-%GCC% !BUILD!
-  if "%CC%" equ "clang" set BUILD=%CLANG% -fuse-ld=lld -target !TARGET! !BUILD!
+  if "%CC%" equ "gcc"   set BUILD=!TARGET!-%WSL_GCC% !BUILD!
+  if "%CC%" equ "clang" set BUILD=%WSL_CLANG% -fuse-ld=lld -target !TARGET! !BUILD!
 
-  if "%ARCH%" equ "rv64" set BUILD=!BUILD! -march=rv64gcv_zba_zbb_zbs
+  if "%ARCH%" equ "rv64" set BUILD=!BUILD! -march=rva23u64
 
   set RUN=
   if "%ARCH%" neq "%HOST_ARCH%" (
     set LDFLAGS=!LDFLAGS! -static
-    set RUN=qemu-!ARCH_VALUE!-static
-    if "%ARCH%" equ "rv64" set RUN=!RUN! -cpu rv64,v=true,zba=true,zbb=true,zbs=true,zfa=true,vlen=128,elen=64,vext_spec=v1.0,rvv_ta_all_1s=true,rvv_ma_all_1s=true
-    %WSL% bash -ic "qemu-!ARCH_VALUE!-static --version | head -1" || exit / b1
+    set RUN=qemu-!ARCH_VALUE!
+    if "%ARCH%" equ "rv64" set RUN=!RUN! -cpu rva23u64,vlen=128,elen=64,vext_spec=v1.0,rvv_ta_all_1s=true,rvv_ma_all_1s=true
+    %WSL% bash -ic "qemu-!ARCH_VALUE! --version | head -1" || exit / b1
   ) else if "%SDE%" neq "" (
     %WSL% bash -ic "sde64 -version | head -1" || exit /b 1
     set RUN=sde64 %SDE% -- !RUN!
@@ -147,8 +158,10 @@ if "%OS%" equ "windows" (
 
 ) else if "%OS%" equ "mingw" (
 
-  if "%CC%" equ "gcc"   set BUILD=x86_64-w64-mingw32-%GCC% !BUILD!
-  if "%CC%" equ "clang" set BUILD=%CLANG% -fuse-ld=lld -target x86_64-w64-mingw32 !BUILD!
+  if "%CC%" equ "gcc"   set BUILD=x86_64-w64-mingw32-gcc !BUILD!
+  if "%CC%" equ "clang" set BUILD=%WSL_CLANG% -fuse-ld=lld -target x86_64-w64-mingw32 !BUILD!
+
+  set BUILD=!BUILD! -D__USE_MINGW_ANSI_STDIO=1 -Wno-format
 
   for /f "tokens=1 delims= " %%a in ("!BUILD!") do %WSL% bash -ic "%%a --version | head -1" || exit /b 1
 
@@ -163,9 +176,9 @@ if "%OS%" equ "windows" (
 ) else if "%OS%" equ "wasi" (
 
   %WSL% bash -ic "wasmtime --version" || exit /b 1
-  for /f "tokens=1 delims= " %%a in ("!BUILD!") do %WSL% bash -ic "%CLANG% --version | head -1" || exit /b 1
+  for /f "tokens=1 delims= " %%a in ("!BUILD!") do %WSL% bash -ic "%WSL_CLANG% --version | head -1" || exit /b 1
 
-  set BUILD=%WSL% bash -ic "%CLANG% -mbulk-memory -msimd128 -fuse-ld=lld -target wasm32-wasi !BUILD! !LDFLAGS! -o %OUTPUT%"
+  set BUILD=%WSL% bash -ic "%WSL_CLANG% -mbulk-memory -msimd128 -fuse-ld=lld -target wasm32-wasip1 !BUILD! !LDFLAGS! -o %OUTPUT%"
   set RUN=%WSL% bash -ic "wasmtime %OUTPUT%"
 
 )

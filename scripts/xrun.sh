@@ -4,20 +4,25 @@ set -euo pipefail
 #set -x
 
 # setup on ArchLinux:
-#   sudo pacman -Syu --needed gcc clang lld compiler-rt                                      # gcc & clang
-#   sudo pacman -Syu --needed aarch64-linux-gnu-glibc riscv64-linux-gnu-gcc qemu-user-static # arm64 & rv64 + qemu
-#   sudo pacman -Syu --needed mingw-w64-gcc wine                                             # mingw + wine
-#   sudo pacman -Syu --needed wasi-libc wasi-compiler-rt wasmtime                            # wasm + wasi
+#   sudo pacman -Syu --needed gcc clang lld compiler-rt                               # gcc & clang
+#   sudo pacman -Syu --needed aarch64-linux-gnu-glibc riscv64-linux-gnu-gcc qemu-user # arm64 & rv64 + qemu
+#   sudo pacman -Syu --needed mingw-w64-gcc wine                                      # mingw + wine
+#   sudo pacman -Syu --needed wasi-libc wasi-compiler-rt wasmtime                     # wasm + wasi
 
-# setup on Ubuntu 24.04:
-#   sudo apt install --no-install-recommends g++ clang lld libclang-rt-dev                                 # gcc & clang
-#   sudo apt install --no-install-recommends g++-aarch64-linux-gnu g++-riscv64-linux-gnu qemu-user-static  # arm64 & rv64 + qemu
-#   sudo apt install --no-install-recommends g++-mingw-w64-x86-64-posix wine                               # mingw + wine
-#   sudo apt install --no-install-recommends wasi-libc libclang-rt-dev-wasm32                              # wasm + wasi
+# setup on Ubuntu 26.04:
+#   sudo apt install --no-install-recommends g++-16  clang-22 lld-22 libclang-rt-22-dev                  # gcc & clang
+#   sudo apt install --no-install-recommends g++-16-aarch64-linux-gnu g++-16-riscv64-linux-gnu qemu-user # arm64 & rv64 + qemu
+#   sudo apt install --no-install-recommends g++-mingw-w64-x86-64 wine                                   # mingw + wine
+#   sudo apt install --no-install-recommends wasi-libc libclang-rt-22-dev-wasm32                         # wasm + wasi
 # then get wasmtime binary:
 #   sudo apt install --no-install-recommends curl ca-certificates xz-utils
-#   curl -sfL https://github.com/bytecodealliance/wasmtime/releases/download/v45.0.0/wasmtime-v45.0.0-$(uname -m)-linux.tar.xz | tar xJ --strip-components=1 wasmtime-v45.0.0-$(uname -m)-linux/wasmtime
-#   sudo mv wasmtime /usr/local/bin/
+#   curl -sfL https://github.com/bytecodealliance/wasmtime/releases/download/v45.0.2/wasmtime-v45.0.2-$(uname -m)-linux.tar.xz | sudo tar xJ --strip-components=1 -C /usr/local/bin/ wasmtime-v45.0.2-$(uname -m)-linux/wasmtime
+# fix wasi runtime library location:
+# see https://bugs.launchpad.net/ubuntu/+source/llvm-toolchain-22/+bug/2152147
+# and https://github.com/llvm/llvm-project/pull/200501
+#   sudo mkdir /usr/lib/llvm-22/lib/clang/22/lib/wasm32-unknown-wasip1
+#   sudo ln -sf /usr/lib/llvm-22/lib/clang/22/lib/wasi/libclang_rt.builtins-wasm32.a /usr/lib/llvm-22/lib/clang/22/lib/wasm32-unknown-wasip1/libclang_rt.builtins.a
+# 
 
 # setup on macOS:
 #   xcode-select --install
@@ -44,7 +49,10 @@ declare HOST_ARCH=$(uname -m)
 
 declare DISTRIB_ID
 [[ -f /etc/lsb-release ]] && source /etc/lsb-release
-[[ -f /etc/os-release ]] && source /etc/os-release && [[ ${ID_LIKE:-} == "arch" ]] && DISTRIB_ID="Arch"
+[[ -f /etc/os-release  ]] && source /etc/os-release && [[ ${ID:-} == "arch" ]] && DISTRIB_ID="Arch"
+
+[[ ${DISTRIB_ID:-} == "Ubuntu" ]] && CLANG=${CLANG:-clang-22} || CLANG=${CLANG:-clang}
+[[ ${DISTRIB_ID:-} == "Ubuntu" ]] && GCC=${GCC:-gcc-16}       || GCC=${GCC:-gcc}
 
 function arg()
 {
@@ -82,17 +90,24 @@ function xrun()
     declare TARGET="${ARCH_VALUE}-linux-gnu"
     [[ ${DISTRIB_ID:-} == "Arch" && ${HOST_ARCH} == "arm64" ]] && TARGET="${ARCH_VALUE}-unknown-linux-gnu"
 
-    [[ ${CC} == "gcc"   ]] && BUILD+=("${TARGET}-${GCC:-gcc}")
-    [[ ${CC} == "clang" ]] && BUILD+=("${CLANG:-clang} -fuse-ld=lld -target ${TARGET}")
+    [[ ${CC} == "gcc"   ]] && BUILD+=("${TARGET}-${GCC}")
+    [[ ${CC} == "clang" ]] && BUILD+=("${CLANG} -fuse-ld=lld -target ${TARGET}")
 
-    [[ ${ARCH} == "rv64"  ]] && BUILD+=("-march=rv64gcv_zba_zbb_zbs")
+    if [[ "${DISTRIB_ID:-}" == "Arch" && ${CC} == "gcc" ]]; then
+      # remove this when Arch updates riscv gcc to 16
+      [[ ${ARCH} == "rv64" ]] && BUILD+=("-march=rv64gcv_zba_zbb_zbs")
+    else
+      [[ ${ARCH} == "rv64" ]] && BUILD+=("-march=rva23u64")
+    fi
 
     if [[ ${ARCH} != ${HOST_ARCH} ]]; then
-      [[ ${DISTRIB_ID:-} == "Arch" ]] && BUILD+=("--sysroot=/usr/${TARGET}")
       BUILD+=("-static")
-      RUN+=("qemu-${ARCH_VALUE}-static")
-      [[ ${ARCH} == "rv64" ]] && RUN+=("-cpu rv64,v=true,zba=true,zbb=true,zbs=true,vlen=128,elen=64,vext_spec=v1.0,rvv_ta_all_1s=true,rvv_ma_all_1s=true")
-      qemu-${ARCH_VALUE}-static --version | head -1
+      [[ "${DISTRIB_ID:-}" == "Arch" ]] && BUILD+=("--sysroot=/usr/${TARGET}")
+
+      RUN+=("qemu-${ARCH_VALUE}")
+      [[ ${ARCH} == "rv64" ]] && RUN+=("-cpu rva23u64,vlen=128,elen=64,vext_spec=v1.0,rvv_ta_all_1s=true,rvv_ma_all_1s=true")
+
+      ${RUN[0]} --version | head -1
     elif [[ ${SDE:-} != "" ]]; then
       RUN+=("sde64" "${SDE}" "--")
       sde64 -version | head -1
@@ -100,7 +115,7 @@ function xrun()
 
   elif [[ ${OS} == "macos" ]]; then
 
-    BUILD+=("${CLANG:-clang}")
+    BUILD+=("${CLANG}")
     [[ ${ARCH} == "x64"   ]] && BUILD+=("-arch x86_64")
     [[ ${ARCH} == "arm64" ]] && BUILD+=("-arch arm64")
 
@@ -111,16 +126,16 @@ function xrun()
 
   elif [[ ${OS} == "mingw" ]]; then
 
-    [[ ${CC} == "gcc"   ]] && BUILD+=("x86_64-w64-mingw32-${GCC:-gcc}")
-    [[ ${CC} == "clang" ]] && BUILD+=("${CLANG:-clang} -fuse-ld=lld -target x86_64-w64-mingw32")
+    [[ ${CC} == "gcc"   ]] && BUILD+=("x86_64-w64-mingw32-gcc")
+    [[ ${CC} == "clang" ]] && BUILD+=("${CLANG} -fuse-ld=lld -target x86_64-w64-mingw32")
 
-    BUILD+=("-static")
+    BUILD+=("-D__USE_MINGW_ANSI_STDIO=1 -Wno-format")
     RUN+=("env WINEDEBUG=-all wine")
     env WINEDEBUG=-all wine --version
 
   elif [[ ${OS} == "wasi" ]]; then
 
-    BUILD+=("${CLANG:-clang} -mbulk-memory -msimd128 -fuse-ld=lld -target wasm32-wasi")
+    BUILD+=("${CLANG:-clang} -mbulk-memory -msimd128 -fuse-ld=lld -target wasm32-wasip1")
     [[ ${DISTRIB_ID:-} == "Arch" ]] && BUILD+=("--sysroot=/usr/share/wasi-sysroot")
     [[ ${HOST_OS} == "Darwin"    ]] && BUILD+=("--sysroot=/opt/homebrew/share/wasi-sysroot")
 
