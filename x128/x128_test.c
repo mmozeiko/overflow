@@ -136,7 +136,7 @@ int main()
             x128 u = x128_set_u64(value);
             CHECK_X(u, test_x128_set_u64[i], "x128_set_u64(%u)", value);
 
-            x128 s = x128_set_s64(value);
+            x128 s = x128_set_s64((int64_t)value);
             CHECK_X(s, test_x128_set_s64[i], "x128_set_s64(%u)", value);
 
             assert(x128_get_u64(u) == value);

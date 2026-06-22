@@ -39,7 +39,7 @@ if "%PROCESSOR_ARCHITECTURE%" equ "ARM64" set HOST_ARCH=arm64
 
 set CL_FLAGS=-O2 -W3 -WX
 
-set CFLAGS=-O2 -Wall -Wextra -Werror -ffp-contract=off -fno-lax-vector-conversions
+set CFLAGS=-O2 -Wall -Wextra -Werror -Wconversion -Wshadow -ffp-contract=off -fno-lax-vector-conversions
 set LDFLAGS=-lm
 
 set CLANG_ARCH_arm64=arm64

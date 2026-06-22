@@ -34,7 +34,7 @@ set -euo pipefail
 declare INPUT=${1}; shift
 declare ARGS=($@)
           
-declare CFLAGS=("-O2 -Wall -Wextra -Werror -ffp-contract=off -fno-lax-vector-conversions")
+declare CFLAGS=("-O2 -Wall -Wextra -Werror -Wconversion -Wshadow -ffp-contract=off -fno-lax-vector-conversions")
 declare LDFLAGS=("-lm")
 
 declare OS_VALUES=("linux macos mingw wasi")

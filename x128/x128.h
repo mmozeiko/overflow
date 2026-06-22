@@ -108,7 +108,7 @@ static inline uint32_t x128__clz64(uint64_t x)
     _BitScanReverse64(&n, x);
     return x ? n ^ 63 : 64;
 #else
-    return x ? __builtin_clzll(x) : 64;
+    return x ? (uint32_t)__builtin_clzll(x) : 64;
 #endif
 }
 
@@ -118,7 +118,7 @@ static inline uint32_t x128__ctz64(uint64_t x)
     unsigned long n;
     return _BitScanForward64(&n, x) ? n : 64;
 #else
-    return x ? __builtin_ctzll(x) : 64;
+    return x ? (uint32_t)__builtin_ctzll(x) : 64;
 #endif
 }
 
@@ -186,9 +186,9 @@ x128 x128_set_str(const char* str, size_t len, size_t base)
             break;
         }
 
-        uint64_t digit = (ch >= '0' && ch <= '9') ? (ch - '0')
-                       : (ch >= 'a' && ch <= 'z') ? (ch - 'a' + 10)
-                       : (ch >= 'A' && ch <= 'Z') ? (ch - 'A' + 10)
+        uint64_t digit = (ch >= '0' && ch <= '9') ? (uint64_t)(ch - '0')
+                       : (ch >= 'a' && ch <= 'z') ? (uint64_t)(ch - 'a' + 10)
+                       : (ch >= 'A' && ch <= 'Z') ? (uint64_t)(ch - 'A' + 10)
                        : 0;
         x = x128_mul_128x64(x, base);
         x = x128_add(x, x128_set_u64(digit));
@@ -315,8 +315,8 @@ int x128_cmp_s(x128 a, x128 b)
 
 #else
 
-    int an = a.hi >> 63;
-    int bn = b.hi >> 63;
+    int an = (int)(a.hi >> 63);
+    int bn = (int)(b.hi >> 63);
 
     int r = x128_cmp_u(a, b);
     int n = bn - an;
@@ -490,13 +490,13 @@ x128 x128_shr_s(x128 x, size_t n)
     }
     else if (n < 64)
     {
-        lo = (         x.lo >> n) | (x.hi << (64 - n));
-        hi = ((int64_t)x.hi >> n);
+        lo = (uint64_t)(         x.lo >> n) | (x.hi << (64 - n));
+        hi = (uint64_t)((int64_t)x.hi >> n);
     }
     else
     {
-        lo = ((int64_t)x.hi >> (n - 64));
-        hi = ((int64_t)x.hi >> 63);
+        lo = (uint64_t)((int64_t)x.hi >> (n - 64));
+        hi = (uint64_t)((int64_t)x.hi >> 63);
     }
 
 #endif
@@ -556,7 +556,7 @@ size_t x128_popcnt(x128 x)
     hi = (hi + (hi >> 4)) & k3;
     hi = (hi * k4) >> 56;
 
-    return lo + hi;
+    return (size_t)(lo + hi);
 
 #endif
 }
@@ -949,7 +949,7 @@ static inline uint64_t x128__reciprocal_3by2(x128 d)
     int cmp1 = (p < d.lo) & (p >= d.hi);                              // (4) and (6)
 
     v -= (p < d.lo);                                                  // (5)
-    v -= cmp1;                                                        // (7)
+    v -= (uint64_t)cmp1;                                              // (7)
     p -= cmp1 ? d.hi : 0;                                             // (8)
     p -= d.hi;                                                        // (9)
 
@@ -959,7 +959,7 @@ static inline uint64_t x128__reciprocal_3by2(x128 d)
     int cmp2 = (p < t.hi) & (x128_cmp_u(x128_make(t.lo, p), d) >= 0); // (12) and (14)
 
     v -= (p < t.hi);                                                  // (13)
-    v -= cmp2;                                                        // (15)
+    v -= (uint64_t)cmp2;                                              // (15)
 
 #endif
 
@@ -1006,12 +1006,12 @@ static inline uint64_t x128__div_2by1(uint64_t u0, uint64_t u1, uint64_t d, uint
     uint64_t r = u0 - (q.hi * d);       // (4)
 
     int cmp1 = (r > q.lo);              // (5)
-    q.hi -= cmp1;                       // (6)
-    r += cmp1 ? d : 0;                  // (7)
+    q.hi -= (uint64_t)cmp1;             // (6)
+    r += cmp1 ? (uint64_t)d : 0;        // (7)
 
     int cmp2 = (r >= d);                // (8)
-    q.hi += cmp2;                       // (9)
-    r -= cmp2 ? d : 0;                  // (10)
+    q.hi += (uint64_t)cmp2;             // (9)
+    r -= cmp2 ? (uint64_t)d : 0;        // (10)
 
 #endif
 
@@ -1066,13 +1066,13 @@ static inline uint64_t x128__div_3by2(uint64_t u0, uint64_t u1, uint64_t u2, x12
 
     x128 rd = x128_add(r, d);                             // (9)
     int cmp1 = (r.hi >= q.lo);                            // (7)
-    q.hi -= cmp1;                                         // (8)
+    q.hi -= (uint64_t)cmp1;                               // (8)
     r.lo = cmp1 ? rd.lo : r.lo;                           // (9)
     r.hi = cmp1 ? rd.hi : r.hi;
 
     rd = x128_sub(r, d);                                  // (12)
     int cmp2 = (x128_cmp_u(r, d) >= 0);                   // (10)
-    q.hi += cmp2;                                         // (11)
+    q.hi += (uint64_t)cmp2;                               // (11)
     r.lo = cmp2 ? rd.lo : r.lo;                           // (12)
     r.hi = cmp2 ? rd.hi : r.hi;                           // (12)
 
