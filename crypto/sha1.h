@@ -26,8 +26,6 @@ static inline void sha1_finish(sha1_ctx* ctx, uint8_t digest[SHA1_DIGEST_SIZE]);
 // implementation
 //
 
-#include <string.h> // memcpy, memset
-
 #if defined(__clang__)
 #   pragma clang diagnostic push
 #   pragma clang diagnostic ignored "-Wcast-align"
@@ -37,6 +35,18 @@ static inline void sha1_finish(sha1_ctx* ctx, uint8_t digest[SHA1_DIGEST_SIZE]);
 #elif defined(_MSC_VER)
 #   pragma warning (push)
 #   pragma warning (disable : 4127)
+#endif
+
+#if defined(__clang__)
+#   define SHA1_MEMCPY(dst, src, size) __builtin_memcpy_inline(dst, src, size)
+#   define SHA1_MEMSET(dst, val, size) __builtin_memset_inline(dst, val, size)
+#elif defined(__GNUC__)
+#   define SHA1_MEMCPY(dst, src, size) __builtin_memcpy(dst, src, size)
+#   define SHA1_MEMSET(dst, val, size) __builtin_memset(dst, val, size)
+#else
+#   include <string.h>
+#   define SHA1_MEMCPY(dst, src, size) memcpy(dst, src, size)
+#   define SHA1_MEMSET(dst, val, size) memset(dst, val, size)
 #endif
 
 #if defined(__clang__)
@@ -56,10 +66,10 @@ static inline void sha1_finish(sha1_ctx* ctx, uint8_t digest[SHA1_DIGEST_SIZE]);
 #else
 #   define SHA1_GET32BE(ptr)         \
     (                                \
-        (uint32_t)((ptr)[0] << 24) | \
-        (uint32_t)((ptr)[1] << 16) | \
-        (uint32_t)((ptr)[2] <<  8) | \
-        (uint32_t)((ptr)[3] <<  0)   \
+        ((uint32_t)(ptr)[0] << 24) | \
+        ((uint32_t)(ptr)[1] << 16) | \
+        ((uint32_t)(ptr)[2] <<  8) | \
+        ((uint32_t)(ptr)[3] <<  0)   \
     )
 #   define SHA1_SET32BE(ptr, x) do          \
     {                                       \
@@ -579,6 +589,19 @@ static void sha1_process(uint32_t* state, const uint8_t* block, size_t count)
     #undef F4
 }
 
+// size supported range is (0,64)
+static void sha1_small_copy(uint8_t* dst, const uint8_t* src, size_t size)
+{
+#define SHA1_BLOCK_COPY(n) if (size & n) { SHA1_MEMCPY(dst + size - n, src + size - n, n); SHA1_MEMCPY(dst, src, n); } else
+    SHA1_BLOCK_COPY(32)
+    SHA1_BLOCK_COPY(16)
+    SHA1_BLOCK_COPY(8)
+    SHA1_BLOCK_COPY(4)
+    SHA1_BLOCK_COPY(2)
+    dst[0] = src[0];
+#undef SHA1_BLOCK_COPY
+}
+
 void sha1_init(sha1_ctx* ctx)
 {
     ctx->count = 0;
@@ -599,7 +622,7 @@ void sha1_update(sha1_ctx* ctx, const void* data, size_t size)
     size_t available = SHA1_BLOCK_SIZE - pending;
     if (pending && size >= available)
     {
-        memcpy(ctx->buffer + pending, buffer, available);
+        sha1_small_copy(ctx->buffer + pending, buffer, available);
         sha1_process(ctx->state, ctx->buffer, 1);
         buffer += available;
         size -= available;
@@ -614,7 +637,10 @@ void sha1_update(sha1_ctx* ctx, const void* data, size_t size)
         size -= count * SHA1_BLOCK_SIZE;
     }
 
-    memcpy(ctx->buffer + pending, buffer, size);
+    if (size)
+    {
+        sha1_small_copy(ctx->buffer + pending, buffer, size);
+    }
 }
 
 void sha1_finish(sha1_ctx* ctx, uint8_t digest[SHA1_DIGEST_SIZE])
@@ -628,8 +654,8 @@ void sha1_finish(sha1_ctx* ctx, uint8_t digest[SHA1_DIGEST_SIZE])
     ctx->buffer[pending++] = 0x80;
 
     uint8_t padding[2 * SHA1_BLOCK_SIZE];
-    memcpy(padding, ctx->buffer, SHA1_BLOCK_SIZE);
-    memset(padding + pending, 0, SHA1_BLOCK_SIZE);
+    SHA1_MEMCPY(padding, ctx->buffer, SHA1_BLOCK_SIZE);
+    SHA1_MEMSET(padding + pending, 0, SHA1_BLOCK_SIZE);
     SHA1_SET64BE(padding + blocks * SHA1_BLOCK_SIZE - sizeof(bitcount), bitcount);
 
     sha1_process(ctx->state, padding, blocks);

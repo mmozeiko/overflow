@@ -26,14 +26,24 @@ static inline void md5_finish(md5_ctx* ctx, uint8_t digest[MD5_DIGEST_SIZE]);
 // implementation
 //
 
-#include <string.h> // memcpy, memset
-
 #if defined(__clang__)
 #   pragma clang diagnostic push
 #   pragma clang diagnostic ignored "-Wcast-align"
 #   pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
 #   pragma clang diagnostic ignored "-Wlanguage-extension-token"
 #   pragma clang diagnostic ignored "-Wdeclaration-after-statement"
+#endif
+
+#if defined(__clang__)
+#   define MD5_MEMCPY(dst, src, size) __builtin_memcpy_inline(dst, src, size)
+#   define MD5_MEMSET(dst, val, size) __builtin_memset_inline(dst, val, size)
+#elif defined(__GNUC__)
+#   define MD5_MEMCPY(dst, src, size) __builtin_memcpy(dst, src, size)
+#   define MD5_MEMSET(dst, val, size) __builtin_memset(dst, val, size)
+#else
+#   include <string.h>
+#   define MD5_MEMCPY(dst, src, size) memcpy(dst, src, size)
+#   define MD5_MEMSET(dst, val, size) memset(dst, val, size)
 #endif
 
 #if defined(__clang__)
@@ -52,10 +62,10 @@ static inline void md5_finish(md5_ctx* ctx, uint8_t digest[MD5_DIGEST_SIZE]);
 #else
 #   define MD5_GET32LE(ptr)          \
     (                                \
-        (uint32_t)((ptr)[0] <<  0) | \
-        (uint32_t)((ptr)[1] <<  8) | \
-        (uint32_t)((ptr)[2] << 16) | \
-        (uint32_t)((ptr)[3] << 24)   \
+        ((uint32_t)(ptr)[0] <<  0) | \
+        ((uint32_t)(ptr)[1] <<  8) | \
+        ((uint32_t)(ptr)[2] << 16) | \
+        ((uint32_t)(ptr)[3] << 24)   \
     )
 #   define MD5_SET32LE(ptr, x) do           \
     {                                       \
@@ -370,6 +380,19 @@ static void md5_process(uint32_t* state, const uint8_t* block, size_t count)
     #undef I
 }
 
+// size supported range is (0,64)
+static void md5_small_copy(uint8_t* dst, const uint8_t* src, size_t size)
+{
+#define MD5_BLOCK_COPY(n) if (size & n) { MD5_MEMCPY(dst + size - n, src + size - n, n); MD5_MEMCPY(dst, src, n); } else
+    MD5_BLOCK_COPY(32)
+    MD5_BLOCK_COPY(16)
+    MD5_BLOCK_COPY(8)
+    MD5_BLOCK_COPY(4)
+    MD5_BLOCK_COPY(2)
+    dst[0] = src[0];
+#undef MD5_BLOCK_COPY
+}
+
 void md5_init(md5_ctx* ctx)
 {
     ctx->count = 0;
@@ -389,7 +412,7 @@ void md5_update(md5_ctx* ctx, const void* data, size_t size)
     size_t available = MD5_BLOCK_SIZE - pending;
     if (pending && size >= available)
     {
-        memcpy(ctx->buffer + pending, buffer, available);
+        md5_small_copy(ctx->buffer + pending, buffer, available);
         md5_process(ctx->state, ctx->buffer, 1);
         buffer += available;
         size -= available;
@@ -404,7 +427,10 @@ void md5_update(md5_ctx* ctx, const void* data, size_t size)
         size -= count * MD5_BLOCK_SIZE;
     }
 
-    memcpy(ctx->buffer + pending, buffer, size);
+    if (size)
+    {
+        md5_small_copy(ctx->buffer + pending, buffer, size);
+    }
 }
 
 void md5_finish(md5_ctx* ctx, uint8_t digest[MD5_DIGEST_SIZE])
@@ -418,8 +444,8 @@ void md5_finish(md5_ctx* ctx, uint8_t digest[MD5_DIGEST_SIZE])
     ctx->buffer[pending++] = 0x80;
 
     uint8_t padding[2 * MD5_BLOCK_SIZE];
-    memcpy(padding, ctx->buffer, MD5_BLOCK_SIZE);
-    memset(padding + pending, 0, MD5_BLOCK_SIZE);
+    MD5_MEMCPY(padding, ctx->buffer, MD5_BLOCK_SIZE);
+    MD5_MEMSET(padding + pending, 0, MD5_BLOCK_SIZE);
     MD5_SET64LE(padding + blocks * MD5_BLOCK_SIZE - sizeof(bitcount), bitcount);
 
     md5_process(ctx->state, padding, blocks);

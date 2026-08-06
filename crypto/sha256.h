@@ -34,8 +34,6 @@ static inline void sha224_finish(sha224_ctx* ctx, uint8_t digest[SHA224_DIGEST_S
 // implementation
 //
 
-#include <string.h> // memcpy, memset
-
 #if defined(__clang__)
 #   pragma clang diagnostic push
 #   pragma clang diagnostic ignored "-Wcast-align"
@@ -45,6 +43,18 @@ static inline void sha224_finish(sha224_ctx* ctx, uint8_t digest[SHA224_DIGEST_S
 #elif defined(_MSC_VER)
 #   pragma warning (push)
 #   pragma warning (disable : 4127)
+#endif
+
+#if defined(__clang__)
+#   define SHA256_MEMCPY(dst, src, size) __builtin_memcpy_inline(dst, src, size)
+#   define SHA256_MEMSET(dst, val, size) __builtin_memset_inline(dst, val, size)
+#elif defined(__GNUC__)
+#   define SHA256_MEMCPY(dst, src, size) __builtin_memcpy(dst, src, size)
+#   define SHA256_MEMSET(dst, val, size) __builtin_memset(dst, val, size)
+#else
+#   include <string.h>
+#   define SHA256_MEMCPY(dst, src, size) memcpy(dst, src, size)
+#   define SHA256_MEMSET(dst, val, size) memset(dst, val, size)
 #endif
 
 #if defined(__clang__)
@@ -64,10 +74,10 @@ static inline void sha224_finish(sha224_ctx* ctx, uint8_t digest[SHA224_DIGEST_S
 #else
 #   define SHA256_GET32BE(ptr)       \
     (                                \
-        (uint32_t)((ptr)[0] << 24) | \
-        (uint32_t)((ptr)[1] << 16) | \
-        (uint32_t)((ptr)[2] <<  8) | \
-        (uint32_t)((ptr)[3] <<  0)   \
+        ((uint32_t)(ptr)[0] << 24) | \
+        ((uint32_t)(ptr)[1] << 16) | \
+        ((uint32_t)(ptr)[2] <<  8) | \
+        ((uint32_t)(ptr)[3] <<  0)   \
     )
 #   define SHA256_SET32BE(ptr, x) do        \
     {                                       \
@@ -556,6 +566,19 @@ static void sha256_process(uint32_t* state, const uint8_t* block, size_t count)
     #undef SSig1
 }
 
+// size supported range is (0,64)
+static void sha256_small_copy(uint8_t* dst, const uint8_t* src, size_t size)
+{
+#define SHA256_BLOCK_COPY(n) if (size & n) { SHA256_MEMCPY(dst + size - n, src + size - n, n); SHA256_MEMCPY(dst, src, n); } else
+    SHA256_BLOCK_COPY(32)
+    SHA256_BLOCK_COPY(16)
+    SHA256_BLOCK_COPY(8)
+    SHA256_BLOCK_COPY(4)
+    SHA256_BLOCK_COPY(2)
+    dst[0] = src[0];
+#undef SHA256_BLOCK_COPY
+}
+
 void sha256_init(sha256_ctx* ctx)
 {
     ctx->count = 0;
@@ -579,7 +602,7 @@ void sha256_update(sha256_ctx* ctx, const void* data, size_t size)
     size_t available = SHA256_BLOCK_SIZE - pending;
     if (pending && size >= available)
     {
-        memcpy(ctx->buffer + pending, buffer, available);
+        sha256_small_copy(ctx->buffer + pending, buffer, available);
         sha256_process(ctx->state, ctx->buffer, 1);
         buffer += available;
         size -= available;
@@ -594,7 +617,10 @@ void sha256_update(sha256_ctx* ctx, const void* data, size_t size)
         size -= count * SHA256_BLOCK_SIZE;
     }
 
-    memcpy(ctx->buffer + pending, buffer, size);
+    if (size)
+    {
+        sha256_small_copy(ctx->buffer + pending, buffer, size);
+    }
 }
 
 void sha256_finish(sha256_ctx* ctx, uint8_t digest[SHA256_DIGEST_SIZE])
@@ -608,8 +634,8 @@ void sha256_finish(sha256_ctx* ctx, uint8_t digest[SHA256_DIGEST_SIZE])
     ctx->buffer[pending++] = 0x80;
 
     uint8_t padding[2 * SHA256_BLOCK_SIZE];
-    memcpy(padding, ctx->buffer, SHA256_BLOCK_SIZE);
-    memset(padding + pending, 0, SHA256_BLOCK_SIZE);
+    SHA256_MEMCPY(padding, ctx->buffer, SHA256_BLOCK_SIZE);
+    SHA256_MEMSET(padding + pending, 0, SHA256_BLOCK_SIZE);
     SHA256_SET64BE(padding + blocks * SHA256_BLOCK_SIZE - sizeof(bitcount), bitcount);
 
     sha256_process(ctx->state, padding, blocks);
@@ -643,7 +669,7 @@ void sha224_finish(sha224_ctx* ctx, uint8_t digest[SHA224_DIGEST_SIZE])
     uint8_t temp[SHA256_DIGEST_SIZE];
     sha256_finish(ctx, temp);
 
-    memcpy(digest, temp, SHA224_DIGEST_SIZE);
+    SHA256_MEMCPY(digest, temp, SHA224_DIGEST_SIZE);
 }
 
 #if defined(__clang__)

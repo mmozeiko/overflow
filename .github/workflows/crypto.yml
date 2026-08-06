@@ -41,6 +41,7 @@ jobs:
           os: ${{ matrix.os }}
           cc: ${{ matrix.cc }}
           arch: ${{ matrix.arch }}
+          sde: arl # Arrow Lake
 
       - id: crypto-test-cache
         uses: actions/cache@v5
@@ -57,8 +58,6 @@ jobs:
         if: ${{ matrix.os == 'windows' }}
         shell: cmd
         run: |
-          if "${{ matrix.arch }}" equ "x64" set SDE=-arl
-          set PATH=%CD%\sde;%PATH%
           call scripts\xrun.cmd crypto\utils\test.c  "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" norun c++ || exit /b
           call scripts\xrun.cmd crypto\utils\test.c  "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}"           || exit /b
 
@@ -66,7 +65,5 @@ jobs:
         if: ${{ matrix.os != 'windows' }}
         shell: bash
         run: |
-          export PATH=$(pwd)/sde:${PATH}
-          [[ "${{ matrix.os }}" == "linux" && "${{ matrix.arch }}" == "x64" ]] && export SDE=-arl
           scripts/xrun.sh crypto/utils/test.c  "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" norun c++
           scripts/xrun.sh crypto/utils/test.c  "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}"

@@ -34,8 +34,6 @@ static inline void sha384_finish(sha384_ctx* ctx, uint8_t digest[SHA384_DIGEST_S
 // implementation
 //
 
-#include <string.h> // memcpy, memset
-
 #if defined(__clang__)
 #   pragma clang diagnostic push
 #   pragma clang diagnostic ignored "-Wcast-align"
@@ -45,6 +43,18 @@ static inline void sha384_finish(sha384_ctx* ctx, uint8_t digest[SHA384_DIGEST_S
 #elif defined(_MSC_VER)
 #   pragma warning (push)
 #   pragma warning (disable : 4127)
+#endif
+
+#if defined(__clang__)
+#   define SHA512_MEMCPY(dst, src, size) __builtin_memcpy_inline(dst, src, size)
+#   define SHA512_MEMSET(dst, val, size) __builtin_memset_inline(dst, val, size)
+#elif defined(__GNUC__)
+#   define SHA512_MEMCPY(dst, src, size) __builtin_memcpy(dst, src, size)
+#   define SHA512_MEMSET(dst, val, size) __builtin_memset(dst, val, size)
+#else
+#   include <string.h>
+#   define SHA512_MEMCPY(dst, src, size) memcpy(dst, src, size)
+#   define SHA512_MEMSET(dst, val, size) memset(dst, val, size)
 #endif
 
 #if defined(__clang__)
@@ -61,16 +71,16 @@ static inline void sha384_finish(sha384_ctx* ctx, uint8_t digest[SHA384_DIGEST_S
 #   define SHA512_GET64BE(ptr) _byteswap_uint64( *((const __unaligned uint64_t*)(ptr)) )
 #   define SHA512_SET64BE(ptr,x) *((__unaligned uint64_t*)(ptr)) = _byteswap_uint64(x)
 #else
-#   define SHA512_GET64BE(ptr)              \
-    (                                       \
-        ((uint64_t)((ptr)[0]) << 56) |      \
-        ((uint64_t)((ptr)[1]) << 48) |      \
-        ((uint64_t)((ptr)[2]) << 40) |      \
-        ((uint64_t)((ptr)[3]) << 32) |      \
-        ((uint64_t)((ptr)[4]) << 24) |      \
-        ((uint64_t)((ptr)[5]) << 16) |      \
-        ((uint64_t)((ptr)[6]) <<  8) |      \
-        ((uint64_t)((ptr)[7]) <<  0)        \
+#   define SHA512_GET64BE(ptr)            \
+    (                                     \
+        ((uint64_t)(ptr)[0] << 56) |      \
+        ((uint64_t)(ptr)[1] << 48) |      \
+        ((uint64_t)(ptr)[2] << 40) |      \
+        ((uint64_t)(ptr)[3] << 32) |      \
+        ((uint64_t)(ptr)[4] << 24) |      \
+        ((uint64_t)(ptr)[5] << 16) |      \
+        ((uint64_t)(ptr)[6] <<  8) |      \
+        ((uint64_t)(ptr)[7] <<  0)        \
     )
 #   define SHA512_SET64BE(ptr, x) do        \
     {                                       \
@@ -647,6 +657,20 @@ void sha512_init(sha512_ctx* ctx)
     ctx->state[7] = 0x5be0cd19137e2179;
 }
 
+// size supported range is (0,128)
+static void sha512_small_copy(uint8_t* dst, const uint8_t* src, size_t size)
+{
+#define SHA512_BLOCK_COPY(n) if (size & n) { SHA512_MEMCPY(dst + size - n, src + size - n, n); SHA512_MEMCPY(dst, src, n); } else
+    SHA512_BLOCK_COPY(64)
+    SHA512_BLOCK_COPY(32)
+    SHA512_BLOCK_COPY(16)
+    SHA512_BLOCK_COPY(8)
+    SHA512_BLOCK_COPY(4)
+    SHA512_BLOCK_COPY(2)
+    dst[0] = src[0];
+#undef SHA512_BLOCK_COPY
+}
+
 void sha512_update(sha512_ctx* ctx, const void* data, size_t size)
 {
     const uint8_t* buffer = (const uint8_t*)data;
@@ -658,7 +682,7 @@ void sha512_update(sha512_ctx* ctx, const void* data, size_t size)
     size_t available = SHA512_BLOCK_SIZE - pending;
     if (pending && size >= available)
     {
-        memcpy(ctx->buffer + pending, buffer, available);
+        sha512_small_copy(ctx->buffer + pending, buffer, available);
         sha512_process(ctx->state, ctx->buffer, 1);
         buffer += available;
         size -= available;
@@ -673,7 +697,10 @@ void sha512_update(sha512_ctx* ctx, const void* data, size_t size)
         size -= count * SHA512_BLOCK_SIZE;
     }
 
-    memcpy(ctx->buffer + pending, buffer, size);
+    if (size)
+    {
+        sha512_small_copy(ctx->buffer + pending, buffer, size);
+    }
 }
 
 void sha512_finish(sha512_ctx* ctx, uint8_t digest[SHA512_DIGEST_SIZE])
@@ -688,8 +715,8 @@ void sha512_finish(sha512_ctx* ctx, uint8_t digest[SHA512_DIGEST_SIZE])
     ctx->buffer[pending++] = 0x80;
 
     uint8_t padding[2 * SHA512_BLOCK_SIZE];
-    memcpy(padding, ctx->buffer, SHA512_BLOCK_SIZE);
-    memset(padding + pending, 0, SHA512_BLOCK_SIZE);
+    SHA512_MEMCPY(padding, ctx->buffer, SHA512_BLOCK_SIZE);
+    SHA512_MEMSET(padding + pending, 0, SHA512_BLOCK_SIZE);
     SHA512_SET64BE(padding + blocks * SHA512_BLOCK_SIZE - 2*sizeof(uint64_t), bitcount[1]);
     SHA512_SET64BE(padding + blocks * SHA512_BLOCK_SIZE - 1*sizeof(uint64_t), bitcount[0]);
 
@@ -725,7 +752,7 @@ void sha384_finish(sha384_ctx* ctx, uint8_t digest[SHA384_DIGEST_SIZE])
     uint8_t temp[SHA512_DIGEST_SIZE];
     sha512_finish(ctx, temp);
 
-    memcpy(digest, temp, SHA384_DIGEST_SIZE);
+    SHA512_MEMCPY(digest, temp, SHA384_DIGEST_SIZE);
 }
 
 #if defined(__clang__)
