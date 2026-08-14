@@ -81,6 +81,8 @@ for %%a in (%ARGS%) do for %%x in (%ARCH_VALUES%) do  if "%%x" equ "%%~a" if "%%
 
 echo ===== %OS% %ARCH% %CC% =====
 
+set OTHER=
+
 if "%CC%" equ "msvc" (
   set BUILD=%CL_FLAGS%
   for %%x in (%ARGS%) do (
@@ -90,7 +92,7 @@ if "%CC%" equ "msvc" (
     if "!X!" equ "sse4"   set BUILD=!BUILD! -arch:SSE4.2
     if "!X!" equ "avx2"   set BUILD=!BUILD! -arch:AVX2
     if "!X!" equ "avx512" set BUILD=!BUILD! -arch:AVX512
-    if "!X:~0,1!" equ "-" set BUILD=!BUILD! %%x
+    if "!X:~0,1!" equ "-" set OTHER=!OTHER! %%x
   )
 ) else (
   set BUILD=%CFLAGS%
@@ -102,10 +104,10 @@ if "%CC%" equ "msvc" (
     if "!X!" equ "avx2"   set BUILD=!BUILD! -mavx2 -mfma
     if "!X!" equ "avx512" set BUILD=!BUILD! -mavx512f -mavx512cd -mavx512bw -mavx512dq -mavx512vl
     if "!X!" equ "ubsan"  set BUILD=!BUILD! -fsanitize=undefined
-    if "!X:~0,1!" equ "-" set BUILD=!BUILD! %%x
+    if "!X:~0,1!" equ "-" set OTHER=!OTHER! %%x
   )
 )
-set BUILD=!BUILD! !NAME!
+set BUILD=!BUILD! !NAME! !OTHER!
 
 for %%a in (%ARGS%) do if "%%a" equ "norun" set NORUN=1
 

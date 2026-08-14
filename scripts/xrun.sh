@@ -151,8 +151,8 @@ function xrun()
   arg "avx512" && BUILD+=("-mavx512f -mavx512cd -mavx512bw -mavx512dq -mavx512vl")
   arg "ubsan"  && BUILD+=("-fsanitize=undefined")
   BUILD+=(${CFLAGS})
-  for x in ${ARGS[@]+"${ARGS[@]}"}; do [[ ${x} == -* ]] && BUILD+=(${x}); done
   BUILD+=(${INPUT})
+  for x in ${ARGS[@]+"${ARGS[@]}"}; do [[ ${x} == -* ]] && BUILD+=(${x}); done
   BUILD+=(${LDFLAGS})
 
   ${BUILD[0]} --version | head -1

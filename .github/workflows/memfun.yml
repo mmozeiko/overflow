@@ -1,0 +1,72 @@
+
+name: memfun
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: [ 'main' ]
+    paths:    [ 'memfun/*' ]
+
+jobs:
+  memfun:
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows, cc: msvc,  arch: x64,    runs: windows-2025          }
+          - { os: windows, cc: clang, arch: x64,    runs: windows-2025          }
+          - { os: windows, cc: msvc,  arch: arm64,  runs: windows-11-vs2026-arm }
+          - { os: windows, cc: clang, arch: arm64,  runs: windows-11-vs2026-arm }
+          - { os: linux,   cc: clang, arch: x64,    runs: ubuntu-26.04          }
+          - { os: linux,   cc: gcc,   arch: x64,    runs: ubuntu-26.04          }
+          - { os: linux,   cc: clang, arch: arm64,  runs: ubuntu-26.04-arm      }
+          - { os: linux,   cc: gcc,   arch: arm64,  runs: ubuntu-26.04-arm      }
+          - { os: linux,   cc: clang, arch: rv64,   runs: ubuntu-26.04          }
+          - { os: linux,   cc: gcc,   arch: rv64,   runs: ubuntu-26.04          }
+          - { os: macos,   cc: clang, arch: x64,    runs: macos-26-intel        }
+          - { os: macos,   cc: clang, arch: arm64,  runs: macos-26              }
+          - { os: mingw,   cc: clang, arch: x64,    runs: ubuntu-26.04          }
+          - { os: mingw,   cc: gcc,   arch: x64,    runs: ubuntu-26.04          }
+          - { os: wasi,    cc: clang, arch: wasm32, runs: ubuntu-26.04          }
+
+    name: ${{ matrix.os }}-${{ matrix.cc }}-${{ matrix.arch }}
+
+    runs-on: ${{ matrix.runs }}
+
+    steps:
+
+      - uses: actions/checkout@v6
+
+      - uses: ./.github/workflows/shared
+        with:
+          os: ${{ matrix.os }}
+          cc: ${{ matrix.cc }}
+          arch: ${{ matrix.arch }}
+
+      - if: ${{ matrix.os == 'windows' }}
+        shell: cmd
+        run: |
+          set PATH=%CD%\sde;%PATH%
+          if "${{ matrix.arch }}" equ "x64" set SDE=-spr
+          call scripts\xrun.cmd memfun\memfun_bench.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" norun     || exit /b 1
+          call scripts\xrun.cmd memfun\memfun_test.c  "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" norun c++ || exit /b 1
+          call scripts\xrun.cmd memfun\memfun_test.c  "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}"           || exit /b 1
+
+      - if: ${{ matrix.os != 'windows' }}
+        shell: bash
+        run: |
+          export PATH=$(pwd)/sde:${PATH}
+          [[ "${{ matrix.os }}" == "linux" && "${{ matrix.arch }}" == "x64" ]] && export SDE=-spr
+          scripts/xrun.sh memfun/memfun_test.c  "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" norun c++
+          scripts/xrun.sh memfun/memfun_test.c  "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}"
+
+      - if: ${{ matrix.os == 'linux' || matrix.os == 'macos' }}
+        shell: bash
+        run: |
+          scripts/xrun.sh memfun/memfun_bench.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" norun
+
+      - if: ${{ matrix.os == 'mingw' }}
+        shell: bash
+        run: |
+          scripts/xrun.sh memfun/memfun_bench.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" norun -Wno-unknown-pragmas -lpowrprof -luuid
