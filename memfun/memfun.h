@@ -771,7 +771,7 @@ bool MemIsEqual_sse2(const void* ptr1, const void* ptr2, size_t size)
             b1 = MEM_PTR64U(p2 + size - 8);
         }
 
-        // compare laoded bytes on equality, overlapped ones will be checked twice
+        // compare loaded bytes on equality, overlapped ones will be checked twice
         // but result will still be correct
         return (a0 == b0) & (a1 == b1);
     }
@@ -2190,7 +2190,7 @@ int MemCompare_avx512(const void* ptr1, const void* ptr2, size_t size)
         __mmask64 m = _mm512_cmpneq_epu8_mask(a, b);
         if (!_kortestz_mask64_u8(m, m))
         {
-            // if they are different, then find position of byte that is is less than other value
+            // if they are different, then find position of byte that is less than other value
             int r1 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(a, b)));
             int r2 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(b, a)));
 
@@ -2203,7 +2203,7 @@ int MemCompare_avx512(const void* ptr1, const void* ptr2, size_t size)
         p2 += extra;
     }
 
-    // now size is multiple of 64 bytes, handle case when it is not not 128-byte multiple
+    // now size is multiple of 64 bytes, handle case when it is not 128-byte multiple
     if (size & 64)
     {
         // 64 byte loads
@@ -2214,7 +2214,7 @@ int MemCompare_avx512(const void* ptr1, const void* ptr2, size_t size)
         __mmask64 m = _mm512_cmpneq_epu8_mask(a, b);
         if (!_kortestz_mask64_u8(m, m))
         {
-            // if they are different, then find position of byte that is is less than other value
+            // if they are different, then find position of byte that is less than other value
             int r1 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(a, b)));
             int r2 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(b, a)));
 
@@ -2240,7 +2240,7 @@ int MemCompare_avx512(const void* ptr1, const void* ptr2, size_t size)
         __mmask64 m1 = _mm512_cmpneq_epu8_mask(a1, b1);
         if (!_kortestz_mask64_u8(m0, m1))
         {
-            // if they are different, then find position of byte that is is less than other value
+            // if they are different, then find position of byte that is less than other value
             int r10 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(a0, b0)));
             int r20 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(b0, a0)));
             int r11 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(a1, b1)));
@@ -2284,7 +2284,7 @@ int MemCompareI_avx512(const void* ptr1, const void* ptr2, size_t size)
         __mmask64 m = _mm512_cmpneq_epu8_mask(a, b);
         if (!_kortestz_mask64_u8(m, m))
         {
-            // if they are different, then find position of byte that is is less than other value
+            // if they are different, then find position of byte that is less than other value
             int r1 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(a, b)));
             int r2 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(b, a)));
 
@@ -2297,7 +2297,7 @@ int MemCompareI_avx512(const void* ptr1, const void* ptr2, size_t size)
         p2 += extra;
     }
 
-    // now size is multiple of 64 bytes, handle case when it is not not 128-byte multiple
+    // now size is multiple of 64 bytes, handle case when it is not 128-byte multiple
     if (size & 64)
     {
         // 64 byte loads & convert to lowercase
@@ -2308,7 +2308,7 @@ int MemCompareI_avx512(const void* ptr1, const void* ptr2, size_t size)
         __mmask64 m = _mm512_cmpneq_epu8_mask(a, b);
         if (!_kortestz_mask64_u8(m, m))
         {
-            // if they are different, then find position of byte that is is less than other value
+            // if they are different, then find position of byte that is less than other value
             int r1 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(a, b)));
             int r2 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(b, a)));
 
@@ -2334,7 +2334,7 @@ int MemCompareI_avx512(const void* ptr1, const void* ptr2, size_t size)
         __mmask64 m1 = _mm512_cmpneq_epu8_mask(a1, b1);
         if (!_kortestz_mask64_u8(m0, m1))
         {
-            // if they are different, then find position of byte that is is less than other value
+            // if they are different, then find position of byte that is less than other value
             int r10 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(a0, b0)));
             int r20 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(b0, a0)));
             int r11 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(a1, b1)));
@@ -2387,7 +2387,7 @@ bool MemIsEqual_avx512(const void* ptr1, const void* ptr2, size_t size)
         p2 += extra;
     }
 
-    // now size is multiple of 64 bytes, handle case when it is not not 128-byte multiple
+    // now size is multiple of 64 bytes, handle case when it is not 128-byte multiple
     if (size & 64)
     {
         // 64 byte loads
@@ -2464,7 +2464,7 @@ size_t MemFind_avx512(const void* ptr, size_t size, uint8_t value)
         p += extra;
     }
 
-    // now size is multiple of 64 bytes, handle case when it is not not 128-byte multiple
+    // now size is multiple of 64 bytes, handle case when it is not 128-byte multiple
     if (size & 64)
     {
         // 64 byte load
@@ -2544,7 +2544,7 @@ size_t MemFindNot_avx512(const void* ptr, size_t size, uint8_t value)
         p += extra;
     }
 
-    // now size is multiple of 64 bytes, handle case when it is not not 128-byte multiple
+    // now size is multiple of 64 bytes, handle case when it is not 128-byte multiple
     if (size & 64)
     {
         // 64 byte load
@@ -2673,15 +2673,14 @@ int MemCompare_neon(const void* ptr1, const void* ptr2, size_t size)
         uint8x16_t c2 = vceqq_u8(a.val[2], b.val[2]);
         uint8x16_t c3 = vceqq_u8(a.val[3], b.val[3]);
 
-        // combine comparisons - leave 0x00 in all lanes that were not equal
-        uint8x16_t c = vandq_u8(vandq_u8(c0, c1), vandq_u8(c2, c3));
+        // combine comparisons - leave 0xff in lanes that were not equal in at least one of inputs
+        uint8x16_t c = vmvnq_u8(vandq_u8(vandq_u8(c0, c1), vandq_u8(c2, c3)));
 
-        // nibbles will contain 16 masks with 4-bit value 0xf if all lanes were equal
-        // if there is one lane that was not equal, it contains 0x0
-        // which means adding 1 will flip all bits to 0 below it, and keep it set to 1
+        // nibbles will contain 16 masks with 4-bit value 0xf for lanes that were not equal
+        // meaning if nibbles is non-zero, then there is mismatch in input bytes
         uint8x8_t mask = vshrn_n_u16(vreinterpretq_u16_u8(c), 4);
         uint64_t nibbles = vget_lane_u64(vreinterpret_u64_u8(mask), 0);
-        if (nibbles + 1)
+        if (nibbles)
         {
             // change all lanes with 0xff byte to 0
             // but for lanes with 0x00 byte keep its index (8 based)
@@ -2893,13 +2892,13 @@ int MemCompareI_neon(const void* ptr1, const void* ptr2, size_t size)
         uint8x16_t c2 = vceqq_u8(MemToLower16(a.val[2]), MemToLower16(b.val[2]));
         uint8x16_t c3 = vceqq_u8(MemToLower16(a.val[3]), MemToLower16(b.val[3]));
 
-        // combine comparisons - leave 0x00 in all lanes that were not equal
-        uint8x16_t c = vandq_u8(vandq_u8(c0, c1), vandq_u8(c2, c3));
+        // combine comparisons - leave 0xff in lanes that were not equal in at least one of inputs
+        uint8x16_t c = vmvnq_u8(vandq_u8(vandq_u8(c0, c1), vandq_u8(c2, c3)));
 
         // extract 4-bit nibble mask
         uint8x8_t mask = vshrn_n_u16(vreinterpretq_u16_u8(c), 4);
         uint64_t nibbles = vget_lane_u64(vreinterpret_u64_u8(mask), 0);
-        if (nibbles + 1)
+        if (nibbles)
         {
             // comparisons to bit index masks
             uint8x16_t m0 = vbicq_u8(index4, c0);
@@ -3070,7 +3069,7 @@ bool MemIsEqual_neon(const void* ptr1, const void* ptr2, size_t size)
             b1 = MEM_PTR64U(p2 + size - 8);
         }
 
-        // compare laoded bytes on equality, overlapped ones will be checked twice
+        // compare loaded bytes on equality, overlapped ones will be checked twice
         // but result will still be correct
         return (a0 == b0) & (a1 == b1);
     }
@@ -3087,15 +3086,15 @@ bool MemIsEqual_neon(const void* ptr1, const void* ptr2, size_t size)
         uint8x16_t c2 = vceqq_u8(a.val[2], b.val[2]);
         uint8x16_t c3 = vceqq_u8(a.val[3], b.val[3]);
 
-        // combine comparisons - leave 0x00 in lanes that were not equal
-        uint8x16_t c = vandq_u8(vandq_u8(c0, c1), vandq_u8(c2, c3));
+        // combine comparisons - leave 0xff in lanes that were not equal in at least one of inputs
+        uint8x16_t c = vmvnq_u8(vandq_u8(vandq_u8(c0, c1), vandq_u8(c2, c3)));
 
         // extract 4-bit nibble mask
         uint8x8_t mask = vshrn_n_u16(vreinterpretq_u16_u8(c), 4);
         uint64_t nibbles = vget_lane_u64(vreinterpret_u64_u8(mask), 0);
-        if (nibbles + 1)
+        if (nibbles)
         {
-            // if nibbles where not all 0xff, then there is at least one difference
+            // if nibbles is non-zero then there is at least one difference
             return false;
         }
 
@@ -3118,15 +3117,15 @@ bool MemIsEqual_neon(const void* ptr1, const void* ptr2, size_t size)
         uint8x16_t c2 = vceqq_u8(a1.val[0], b1.val[0]);
         uint8x16_t c3 = vceqq_u8(a1.val[1], b1.val[1]);
 
-        // combine comparisons - leave 0x00 in lanes that were not equal
-        uint8x16_t c = vandq_u8(vandq_u8(c0, c1), vandq_u8(c2, c3));
+        // combine comparisons - leave 0xff in lanes that were not equal in at least one of inputs
+        uint8x16_t c = vmvnq_u8(vandq_u8(vandq_u8(c0, c1), vandq_u8(c2, c3)));
 
         // extract 4-bit nibble mask
         uint8x8_t mask = vshrn_n_u16(vreinterpretq_u16_u8(c), 4);
         uint64_t nibbles = vget_lane_u64(vreinterpret_u64_u8(mask), 0);
 
-        // if nibbles where not all 0xff, then there is at least one difference
-        return (nibbles + 1) == 0;
+        // if nibbles are zero, then there were no differences in inputs
+        return nibbles == 0;
     }
     else if (size & 16) // 16 <= size < 32
     {
@@ -3140,15 +3139,15 @@ bool MemIsEqual_neon(const void* ptr1, const void* ptr2, size_t size)
         uint8x16_t c0 = vceqq_u8(a0, b0);
         uint8x16_t c1 = vceqq_u8(a1, b1);
 
-        // combine comparisons - leave 0x00 in lanes that were not equal
-        uint8x16_t c = vandq_u8(c0, c1);
+        // combine comparisons - leave 0xff in lanes that were not equal in at least one of inputs
+        uint8x16_t c = vmvnq_u8(vandq_u8(c0, c1));
 
         // extract 4-bit nibble mask
         uint8x8_t mask = vshrn_n_u16(vreinterpretq_u16_u8(c), 4);
         uint64_t nibbles = vget_lane_u64(vreinterpret_u64_u8(mask), 0);
 
-        // if nibbles where not all 0xff, then there is at least one difference
-        return (nibbles + 1) == 0;
+        // if nibbles are zero, then there were no differences in inputs
+        return nibbles == 0;
     }
     else if (size) // 0 < size < 16, but initially size > 16
     {
@@ -3157,15 +3156,15 @@ bool MemIsEqual_neon(const void* ptr1, const void* ptr2, size_t size)
         uint8x16_t a = vld1q_u8(p1 + size - 0x10);
         uint8x16_t b = vld1q_u8(p2 + size - 0x10);
 
-        // set lanes to 0xff if bytes are equal, or 0x00 if not
-        uint8x16_t c = vceqq_u8(a, b);
+        // combine comparisons - leave 0xff in lanes that were not equal in at least one of inputs
+        uint8x16_t c = vmvnq_u8(vceqq_u8(a, b));
 
         // extract 4-bit nibble mask
         uint8x8_t mask = vshrn_n_u16(vreinterpretq_u16_u8(c), 4);
         uint64_t nibbles = vget_lane_u64(vreinterpret_u64_u8(mask), 0);
 
-        // if nibbles where not all 0xff, then there is at least one difference
-        return (nibbles + 1) == 0;
+        // if nibbles are zero, then there were no differences in inputs
+        return nibbles == 0;
     }
 
     // no differences found, inputs are equal
@@ -3197,7 +3196,7 @@ size_t MemFind_neon(const void* ptr, size_t size, uint8_t value)
         uint8x16_t b = vceqq_u8(a, value16);
 
         // nibbles will contain 16 masks with 4-bit value 0xf if lane matches input value
-        // if there is one lane that was not equal, it contains 0x0
+        // if there is one lane that was not equal, mask contains 0x0
         uint8x8_t mask = vshrn_n_u16(vreinterpretq_u16_u8(b), 4);
         uint64_t nibbles = vget_lane_u64(vreinterpret_u64_u8(mask), 0);
 
@@ -3227,7 +3226,13 @@ size_t MemFind_neon(const void* ptr, size_t size, uint8_t value)
         uint8x16_t b3 = vceqq_u8(a.val[3], value16);
 
         // combine comparisons - leave 0xff in lanes there equal to input value
-        uint8x16_t b = vorrq_u8(vorrq_u8(b0, b1), vorrq_u8(b2, b3));
+        uint8x16_t b01 = vorrq_u8(b0, b1);
+        uint8x16_t b23 = vorrq_u8(b2, b3);
+#if defined(__clang__)
+        // without this clang 19+ generates worse code (runs slower)
+        __asm__ __volatile__("" : "+w"(b01), "+w"(b23));
+#endif
+        uint8x16_t b = vorrq_u8(b01, b23);
 
         // extract 4-bit nibble mask
         uint8x8_t mask = vshrn_n_u16(vreinterpretq_u16_u8(b), 4);
@@ -3399,13 +3404,13 @@ size_t MemFindNot_neon(const void* ptr, size_t size, uint8_t value)
         uint8x16_t b2 = vceqq_u8(a.val[2], value16);
         uint8x16_t b3 = vceqq_u8(a.val[3], value16);
 
-        // combine comparisons - leave 0x00 in all lanes that were not equal
-        uint8x16_t b = vandq_u8(vandq_u8(b0, b1), vandq_u8(b2, b3));
+        // combine comparisons - leave 0xff in lanes that were not matching in at least one of inputs
+        uint8x16_t b = vmvnq_u8(vandq_u8(vandq_u8(b0, b1), vandq_u8(b2, b3)));
 
         // extract 4-bit nibble mask
         uint8x8_t mask = vshrn_n_u16(vreinterpretq_u16_u8(b), 4);
         uint64_t nibbles = vget_lane_u64(vreinterpret_u64_u8(mask), 0);
-        if (nibbles + 1)
+        if (nibbles)
         {
             // comparisons to bit index masks
             uint8x16_t m0 = vbicq_u8(index4, b0);
