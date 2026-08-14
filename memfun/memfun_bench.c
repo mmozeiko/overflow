@@ -509,6 +509,7 @@ typedef struct {
 
     size_t size_index;
     size_t size_count;
+    size_t size_limit;
 
     size_t unroll_count;
 
@@ -517,8 +518,6 @@ typedef struct {
 
     int64_t best_ticks;
     int64_t best_counter;
-
-    bool slow;
 
 } bench_context;
 
@@ -535,7 +534,14 @@ static bool bench_begin(bench_context* ctx, const char* name, const char* suffix
 
     memset(ctx, 0, sizeof(*ctx));
 
-    ctx->slow = strcmp(name, "MemCompareI") == 0 && strcmp(suffix, "std") == 0;
+    if (strcmp(name, "MemCompareI") == 0 && strcmp(suffix, "std") == 0)
+    {
+        ctx->size_limit = 512;
+    }
+    else if (strcmp(suffix, "generic") == 0)
+    {
+        ctx->size_limit = bench_sizes[countof(bench_sizes)-1];
+    }
 
     printf("=== %s_%s\n", name, suffix);
 
@@ -617,7 +623,7 @@ static bool bench_loop(bench_context* ctx, size_t* size, size_t* unroll)
         ctx->iter_index = 0;
 
         size_t s = *size = bench_sizes[size_index];
-        if (ctx->slow && s > 256)
+        if (ctx->size_limit && s >= ctx->size_limit)
         {
             printf("\n");
             fflush(stdout);
