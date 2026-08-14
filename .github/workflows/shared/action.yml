@@ -8,6 +8,8 @@ inputs:
     required: true
   arch:
     required: true
+  sde:
+    required: false
 
   wasmtime:
     default: '45.0.2'
@@ -76,6 +78,13 @@ runs:
         tar.exe -xJf sde-external-${{ inputs.sde_version_full }}-win.tar.xz
         ren sde-external-${{ inputs.sde_version_full }}-win sde
 
+    - name: SDE on windows/x64 env
+      if: ${{ inputs.os == 'windows' && inputs.arch == 'x64' && inputs.sde != '' }}
+      shell: cmd
+      run: |
+        echo PATH=%CD%\sde;%PATH%   >> "%GITHUB_ENV%"
+        echo SDE=-${{ inputs.sde }} >> "%GITHUB_ENV%"
+
     - name: SDE on linux/x64
       if: ${{ inputs.os == 'linux' && inputs.arch == 'x64' && steps.sde-cache.outputs.cache-hit != 'true' }}
       shell: bash
@@ -84,3 +93,10 @@ runs:
         sha256sum -c <(echo "${{ inputs.sde_sha256_linux }} sde-external-${{ inputs.sde_version_full }}-lin.tar.xz")
         tar -xJf sde-external-${{ inputs.sde_version_full }}-lin.tar.xz
         mv sde-external-${{ inputs.sde_version_full }}-lin sde
+
+    - name: SDE on linux/x64 env
+      if: ${{ inputs.os == 'linux' && inputs.arch == 'x64' && inputs.sde != '' }}
+      shell: bash
+      run: |
+        echo PATH=$(pwd)/sde:${PATH} >> "${GITHUB_ENV}"
+        echo SDE=-${{ inputs.sde }}  >> "${GITHUB_ENV}"

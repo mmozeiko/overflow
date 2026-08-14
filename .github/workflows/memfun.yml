@@ -43,30 +43,31 @@ jobs:
           os: ${{ matrix.os }}
           cc: ${{ matrix.cc }}
           arch: ${{ matrix.arch }}
+          sde: spr # Sapphire Rapids
 
-      - if: ${{ matrix.os == 'windows' }}
+      - name: windows test
+        if: ${{ matrix.os == 'windows' }}
         shell: cmd
         run: |
-          set PATH=%CD%\sde;%PATH%
-          if "${{ matrix.arch }}" equ "x64" set SDE=-spr
           call scripts\xrun.cmd memfun\memfun_bench.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" norun     || exit /b 1
           call scripts\xrun.cmd memfun\memfun_test.c  "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" norun c++ || exit /b 1
           call scripts\xrun.cmd memfun\memfun_test.c  "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}"           || exit /b 1
 
-      - if: ${{ matrix.os != 'windows' }}
+      - name: non-windows test
+        if: ${{ matrix.os != 'windows' }}
         shell: bash
         run: |
-          export PATH=$(pwd)/sde:${PATH}
-          [[ "${{ matrix.os }}" == "linux" && "${{ matrix.arch }}" == "x64" ]] && export SDE=-spr
           scripts/xrun.sh memfun/memfun_test.c  "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" norun c++
           scripts/xrun.sh memfun/memfun_test.c  "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}"
 
-      - if: ${{ matrix.os == 'linux' || matrix.os == 'macos' }}
+      - name: linux/macos bench
+        if: ${{ matrix.os == 'linux' || matrix.os == 'macos' }}
         shell: bash
         run: |
           scripts/xrun.sh memfun/memfun_bench.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" norun
 
-      - if: ${{ matrix.os == 'mingw' }}
+      - name: mingw bench
+        if: ${{ matrix.os == 'mingw' }}
         shell: bash
         run: |
           scripts/xrun.sh memfun/memfun_bench.c "${{ matrix.os }}" "${{ matrix.cc }}" "${{ matrix.arch }}" norun -Wno-unknown-pragmas -lpowrprof -luuid
