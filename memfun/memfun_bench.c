@@ -411,7 +411,7 @@ static void bench_init(void)
         exit(1);
     }
 
-    pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+    pthread_set_qos_class_self_np(getenv("ECORE") ? QOS_CLASS_BACKGROUND : QOS_CLASS_USER_INTERACTIVE, 0);
 
     kpc_force_all_ctrs_set(1);
     if ((counter_classes & KPC_CLASS_CONFIGURABLE_MASK) && counter_reg_count)
@@ -480,6 +480,35 @@ static size_t MemFind_std(const void* ptr, size_t size, uint8_t value)
     return r ? (size_t)((char*)r - (char*)ptr) : size;
 }
 
+typedef int    MemCompareFun(const void* ptr1, const void* ptr2, size_t size);
+typedef bool   MemIsEqualFun(const void* ptr1, const void* ptr2, size_t size);
+typedef size_t MemFindFun   (const void* ptr, size_t size, uint8_t value);
+
+static const struct
+{
+    const char*    name;
+    MemCompareFun* compare;
+    MemCompareFun* comparei;
+    MemIsEqualFun* isequal;
+    MemFindFun*    find;
+    MemFindFun*    findnot;
+    int            cpuid;
+}
+memfun[] =
+{
+    { "std",            &MemCompare_std,     &MemCompareI_std,           &MemIsEqual_std,     &MemFind_std,       0,                    0                   },
+#if MEM_ARCH_RVV
+    { "rvv",            &MemCompare_rvv,     &MemCompareI_rvv,           &MemIsEqual_rvv,     &MemFind_rvv,       &MemFindNot_rvv,      0                   },
+#elif MEM_ARCH_ARM64
+    { "neon",           &MemCompare_neon,    &MemCompareI_neon,          &MemIsEqual_neon,    &MemFind_neon,      &MemFindNot_neon,     0                   },
+#elif MEM_ARCH_X64
+    { "sse2",           &MemCompare_sse2,    &MemCompareI_sse2,          &MemIsEqual_sse2,    &MemFind_sse2,      &MemFindNot_sse2,     0                   },
+    { "avx2",           &MemCompare_avx2,    &MemCompareI_avx2,          &MemIsEqual_avx2,    &MemFind_avx2,      &MemFindNot_avx2,     MEM_CPUID_AVX2      },
+    { "avx512",         &MemCompare_avx512,  &MemCompareI_avx512,        &MemIsEqual_avx512,  &MemFind_avx512,    &MemFindNot_avx512,   MEM_CPUID_AVX512    },
+#endif
+    { "generic",        &MemCompare_generic, &MemCompareI_generic,       &MemIsEqual_generic, &MemFind_generic,   &MemFindNot_generic,  0                   },
+};
+
 #define BENCH_TINY_LIMIT  1024
 #define BENCH_SMALL_LIMIT (64*1024)
 
@@ -501,6 +530,16 @@ static const size_t bench_sizes[] =
     2*1024*1024,
 #endif
 };
+
+static size_t bench_index;
+static size_t bench_variant;
+
+static struct
+{
+    double bpc;
+    double mbps;
+}
+bench_results[5][countof(memfun)][countof(bench_sizes)];
 
 typedef struct {
 
@@ -615,6 +654,9 @@ static bool bench_loop(bench_context* ctx, size_t* size, size_t* unroll)
 
         printf("%8zu | %10.1f | %5.2f | %6.0f\n", s, cycles, bpc, mbps);
         fflush(stdout);
+
+        bench_results[bench_index][bench_variant][size_index].bpc  = bpc;
+        bench_results[bench_index][bench_variant][size_index].mbps = mbps;
     }
 
     if (++size_index < ctx->size_count)
@@ -627,6 +669,7 @@ static bool bench_loop(bench_context* ctx, size_t* size, size_t* unroll)
         {
             printf("\n");
             fflush(stdout);
+
             return false;
         }
         ctx->unroll_count = *unroll = s < BENCH_TINY_LIMIT ? BENCH_TINY_COUNT : s < BENCH_SMALL_LIMIT ? BENCH_SMALL_COUNT : BENCH_LARGE_COUNT;
@@ -643,37 +686,9 @@ static bool bench_loop(bench_context* ctx, size_t* size, size_t* unroll)
 
     printf("\n");
     fflush(stdout);
+
     return false;
 }
-
-typedef int    MemCompareFun(const void* ptr1, const void* ptr2, size_t size);
-typedef bool   MemIsEqualFun(const void* ptr1, const void* ptr2, size_t size);
-typedef size_t MemFindFun   (const void* ptr, size_t size, uint8_t value);
-
-static const struct
-{
-    const char*    name;
-    MemCompareFun* compare;
-    MemCompareFun* comparei;
-    MemIsEqualFun* isequal;
-    MemFindFun*    find;
-    MemFindFun*    findnot;
-    int            cpuid;
-}
-memfun[] =
-{
-    { "std",            &MemCompare_std,     &MemCompareI_std,           &MemIsEqual_std,     &MemFind_std,       0,                    0                   },
-#if MEM_ARCH_RVV
-    { "rvv",            &MemCompare_rvv,     &MemCompareI_rvv,           &MemIsEqual_rvv,     &MemFind_rvv,       &MemFindNot_rvv,      0                   },
-#elif MEM_ARCH_ARM64
-    { "neon",           &MemCompare_neon,    &MemCompareI_neon,          &MemIsEqual_neon,    &MemFind_neon,      &MemFindNot_neon,     0                   },
-#elif MEM_ARCH_X64
-    { "avx512",         &MemCompare_avx512,  &MemCompareI_avx512,        &MemIsEqual_avx512,  &MemFind_avx512,    &MemFindNot_avx512,   MEM_CPUID_AVX512    },
-    { "avx2",           &MemCompare_avx2,    &MemCompareI_avx2,          &MemIsEqual_avx2,    &MemFind_avx2,      &MemFindNot_avx2,     MEM_CPUID_AVX2      },
-    { "sse2",           &MemCompare_sse2,    &MemCompareI_sse2,          &MemIsEqual_sse2,    &MemFind_sse2,      &MemFindNot_sse2,     0                   },
-#endif
-    { "generic",        &MemCompare_generic, &MemCompareI_generic,       &MemIsEqual_generic, &MemFind_generic,   &MemFindNot_generic,  0                   },
-};
 
 int main()
 {
@@ -695,7 +710,7 @@ int main()
 
     bench_init();
 
-    for (size_t i=0; i<sizeof(memfun)/sizeof(memfun[0]); i++)
+    for (size_t i=0; i<countof(memfun); i++)
     {
         MemCompareFun* fun = memfun[i].compare;
 
@@ -712,9 +727,12 @@ int main()
                 }
             }
         }
+        bench_variant++;
     }
+    bench_variant = 0;
+    bench_index++;
 
-    for (size_t i=0; i<sizeof(memfun)/sizeof(memfun[0]); i++)
+    for (size_t i=0; i<countof(memfun); i++)
     {
         MemCompareFun* fun = memfun[i].comparei;
 
@@ -731,9 +749,12 @@ int main()
                 }
             }
         }
+        bench_variant++;
     }
+    bench_variant = 0;
+    bench_index++;
 
-    for (size_t i=0; i<sizeof(memfun)/sizeof(memfun[0]); i++)
+    for (size_t i=0; i<countof(memfun); i++)
     {
         MemIsEqualFun* fun = memfun[i].isequal;
 
@@ -750,9 +771,12 @@ int main()
                 }
             }
         }
+        bench_variant++;
     }
+    bench_variant = 0;
+    bench_index++;
 
-    for (size_t i=0; i<sizeof(memfun)/sizeof(memfun[0]); i++)
+    for (size_t i=0; i<countof(memfun); i++)
     {
         MemFindFun* fun = memfun[i].find;
 
@@ -769,9 +793,12 @@ int main()
                 }
             }
         }
+        bench_variant++;
     }
+    bench_variant = 0;
+    bench_index++;
 
-    for (size_t i=0; i<sizeof(memfun)/sizeof(memfun[0]); i++)
+    for (size_t i=0; i<countof(memfun); i++)
     {
         MemFindFun* fun = memfun[i].findnot;
 
@@ -788,7 +815,48 @@ int main()
                 }
             }
         }
+        bench_variant++;
     }
+    bench_variant = 0;
+    bench_index++;
 
     bench_done();
+
+    {
+        static const char* names[] = { "MemCompare", "MemCompareI", "MemIsEqual", "MemFind", "MemFindNot" };
+        static const size_t sizes[] = { 15, 63, 1024, 16384 };
+
+        for (size_t n=0; n<countof(names); n++)
+        {
+            for (size_t s=0; s<countof(sizes); s++)
+            {
+                for (size_t i=0; i<countof(bench_sizes); i++)
+                {
+                    if (bench_sizes[i] == sizes[s])
+                    {
+                        printf("%-14s | %5zu", names[n], sizes[s]);
+
+                        for (size_t t=0; t<countof(memfun)-1; t++)
+                        {
+                            if (strcmp(names[n], "MemCompareI") == 0 && t == 0 && sizes[s] > 64)
+                            {
+                                printf(" | %-19s", "(slow)");
+                            }
+                            else if (strcmp(names[n], "MemFindNot") == 0 && t == 0)
+                            {
+                                printf(" | %-19s", "(n/a)");
+                            }
+                            else
+                            {
+                                printf(" | %5.2f @ %6.0f MB/s", bench_results[n][t][i].bpc, bench_results[n][t][i].mbps);
+                            }
+                        }
+
+                        printf("\n");
+                        break;
+                    }
+                }
+            }
+        }
+    }
 }
