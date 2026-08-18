@@ -273,7 +273,7 @@ MemFindNot     | 16384 | (n/a)               | 13.85 @  31701 MB/s
 compiled with `-march=rv64gv`
 
 ```
-function / bpc |  size |   CRT               |  rvv
+function / bpc |  size |   CRT               |   rvv
 ---------------+-------+---------------------+--------------------
 MemCompare     |    15 |  0.13 @    198 MB/s |  0.27 @    408 MB/s
 MemCompare     |    63 |  0.60 @    918 MB/s |  1.12 @   1713 MB/s

@@ -826,6 +826,44 @@ int main()
         static const char* names[] = { "MemCompare", "MemCompareI", "MemIsEqual", "MemFind", "MemFindNot" };
         static const size_t sizes[] = { 15, 63, 1024, 16384 };
 
+        printf("%-14s | %5s", "function / bpc", "size");
+        for (size_t t=0; t<countof(memfun)-1; t++)
+        {
+            const char* type = (t == 0) ? "CRT" : memfun[t].name;
+
+#if MEM_ARCH_X64
+            if (memfun[t].cpuid && ((MemCPUID() & memfun[t].cpuid) == 0))
+            {
+                continue;
+            }
+#endif
+            int pad1 = strlen(type) > 5 ? 0 : (int)(5 - strlen(type));
+            int pad2 = 2 - pad1;
+            printf(" | %.*s%-17s%.*s", pad1, "  ", type, pad2, "  ");
+        }
+
+        printf("\n");
+
+        {
+            char delim[256];
+            memset(delim, '-', sizeof(delim));
+
+            printf("%.*s+%.*s", 15, delim, 6, delim);
+
+            for (size_t t=0; t<countof(memfun)-1; t++)
+            {
+#if MEM_ARCH_X64
+                if (memfun[t].cpuid && ((MemCPUID() & memfun[t].cpuid) == 0))
+                {
+                    continue;
+                }
+#endif
+                printf("-+%.*s", 20, delim);
+            }
+
+            printf("\n");
+        }
+
         for (size_t n=0; n<countof(names); n++)
         {
             for (size_t s=0; s<countof(sizes); s++)
