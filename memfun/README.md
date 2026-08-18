@@ -217,6 +217,8 @@ MemFindNot     | 16384 | (n/a)               | 30.90 @ 131531 MB/s
 ### clang 22.1.8 on Apple M4, E-core @ 2.90 GHz, macOS
 
 ```
+function / bpc |  size |   CRT               |  neon
+---------------+-------+---------------------+--------------------
 MemCompare     |    15 |  1.07 @   1101 MB/s |  2.50 @   2570 MB/s
 MemCompare     |    63 |  6.69 @   6882 MB/s |  6.28 @   6466 MB/s
 MemCompare     |  1024 |  8.47 @   8722 MB/s | 12.32 @  12683 MB/s
@@ -242,8 +244,8 @@ MemFindNot     | 16384 | (n/a)               | 15.75 @  16223 MB/s
 ### clang 22.1.8 on Raspberry Pi 5, Cortex-A76 @ 2.4 GHz, glibc 2.43, Linux
 
 ```
-function / bpc |  size |   CRT              |  neon
----------------+-------+--------------------+-------------------
+function / bpc |  size |   CRT               |  neon
+---------------+-------+---------------------+--------------------
 MemCompare     |    15 |  1.25 @   2860 MB/s |  1.67 @   3813 MB/s
 MemCompare     |    63 |  4.66 @  10659 MB/s |  3.86 @   8826 MB/s
 MemCompare     |  1024 | 10.57 @  24202 MB/s |  9.51 @  21773 MB/s
@@ -271,8 +273,8 @@ MemFindNot     | 16384 | (n/a)               | 13.85 @  31701 MB/s
 compiled with `-march=rv64gv`
 
 ```
-function / bpc |  size |   CRT              |  rvv
----------------+-------+--------------------+-------------------
+function / bpc |  size |   CRT               |  rvv
+---------------+-------+---------------------+--------------------
 MemCompare     |    15 |  0.13 @    198 MB/s |  0.27 @    408 MB/s
 MemCompare     |    63 |  0.60 @    918 MB/s |  1.12 @   1713 MB/s
 MemCompare     |  1024 |  1.84 @   2814 MB/s |  4.75 @   7255 MB/s
