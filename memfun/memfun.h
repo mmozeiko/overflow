@@ -4025,76 +4025,20 @@ size_t MemFindNot_generic(const void* ptr, size_t size, uint8_t value)
     return offset + size;
 }
 
-#if MEM_ARCH_X64 && defined(__linux__) && !defined(MEM_NO_IFUNC)
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-__attribute__((used))
-static __typeof__(MemCompare)* MemCompare_x64(void)
-{
-    int cpuid = MemCPUID();
-    return (cpuid & MEM_CPUID_AVX512) ? &MemCompare_avx512
-         : (cpuid & MEM_CPUID_AVX2)   ? &MemCompare_avx2
-         :                              &MemCompare_sse2;
-}
-
-__attribute__((used))
-static __typeof__(MemCompareI)* MemCompareI_x64(void)
-{
-    int cpuid = MemCPUID();
-    return (cpuid & MEM_CPUID_AVX512) ? &MemCompareI_avx512
-         : (cpuid & MEM_CPUID_AVX2)   ? &MemCompareI_avx2
-         :                              &MemCompareI_sse2;
-}
-
-__attribute__((used))
-static __typeof__(MemIsEqual)* MemIsEqual_x64(void)
-{
-    int cpuid = MemCPUID();
-    return (cpuid & MEM_CPUID_AVX512) ? &MemIsEqual_avx512
-         : (cpuid & MEM_CPUID_AVX2)   ? &MemIsEqual_avx2
-         :                              &MemIsEqual_sse2;
-}
-
-__attribute__((used))
-static __typeof__(MemFind)* MemFind_x64(void)
-{
-    int cpuid = MemCPUID();
-    return (cpuid & MEM_CPUID_AVX512) ? &MemFind_avx512
-         : (cpuid & MEM_CPUID_AVX2)   ? &MemFind_avx2
-         :                              &MemFind_sse2;
-}
-
-__attribute__((used))
-static __typeof__(MemFindNot)* MemFindNot_x64(void)
-{
-    int cpuid = MemCPUID();
-    return (cpuid & MEM_CPUID_AVX512) ? &MemFindNot_avx512
-         : (cpuid & MEM_CPUID_AVX2)   ? &MemFindNot_avx2
-         :                              &MemFindNot_sse2;
-}
-
-#ifdef __cplusplus
-}
-#endif
-
-int    MemCompare (const void* ptr1, const void* ptr2, size_t size) __attribute__((ifunc("MemCompare_x64" )));
-int    MemCompareI(const void* ptr1, const void* ptr2, size_t size) __attribute__((ifunc("MemCompareI_x64")));
-bool   MemIsEqual (const void* ptr1, const void* ptr2, size_t size) __attribute__((ifunc("MemIsEqual_x64" )));
-size_t MemFind    (const void* ptr, size_t size, uint8_t value)     __attribute__((ifunc("MemFind_x64"    )));
-size_t MemFindNot (const void* ptr, size_t size, uint8_t value)     __attribute__((ifunc("MemFindNot_x64" )));
-
-#else
 
 int MemCompare(const void* ptr1, const void* ptr2, size_t size)
 {
 #if MEM_ARCH_X64
     int cpuid = MemCPUID();
-    return (cpuid & MEM_CPUID_AVX512) ? MemCompare_avx512(ptr1, ptr2, size)
-         : (cpuid & MEM_CPUID_AVX2)   ? MemCompare_avx2(ptr1, ptr2, size)
-         :                              MemCompare_sse2(ptr1, ptr2, size);
+    if (cpuid & MEM_CPUID_AVX512)
+    {
+        return MemCompare_avx512(ptr1, ptr2, size);
+    }
+    else if (cpuid & MEM_CPUID_AVX2)
+    {
+        return MemCompare_avx2(ptr1, ptr2, size);
+    }
+    return MemCompare_sse2(ptr1, ptr2, size);
 #elif MEM_ARCH_ARM64
     return MemCompare_neon(ptr1, ptr2, size);
 #elif MEM_ARCH_RVV
@@ -4108,9 +4052,15 @@ int MemCompareI(const void* ptr1, const void* ptr2, size_t size)
 {
 #if MEM_ARCH_X64
     int cpuid = MemCPUID();
-    return (cpuid & MEM_CPUID_AVX512) ? MemCompareI_avx512(ptr1, ptr2, size)
-         : (cpuid & MEM_CPUID_AVX2)   ? MemCompareI_avx2(ptr1, ptr2, size)
-         :                              MemCompareI_sse2(ptr1, ptr2, size);
+    if (cpuid & MEM_CPUID_AVX512)
+    {
+        return MemCompareI_avx512(ptr1, ptr2, size);
+    }
+    else if (cpuid & MEM_CPUID_AVX2)
+    {
+        return MemCompareI_avx2(ptr1, ptr2, size);
+    }
+    return MemCompareI_sse2(ptr1, ptr2, size);
 #elif MEM_ARCH_ARM64
     return MemCompareI_neon(ptr1, ptr2, size);
 #elif MEM_ARCH_RVV
@@ -4124,9 +4074,15 @@ bool MemIsEqual(const void* ptr1, const void* ptr2, size_t size)
 {
 #if MEM_ARCH_X64
     int cpuid = MemCPUID();
-    return (cpuid & MEM_CPUID_AVX512) ? MemIsEqual_avx512(ptr1, ptr2, size)
-         : (cpuid & MEM_CPUID_AVX2)   ? MemIsEqual_avx2(ptr1, ptr2, size)
-         :                              MemIsEqual_sse2(ptr1, ptr2, size);
+    if (cpuid & MEM_CPUID_AVX512)
+    {
+        return MemIsEqual_avx512(ptr1, ptr2, size);
+    }
+    else if (cpuid & MEM_CPUID_AVX2)
+    {
+        return MemIsEqual_avx2(ptr1, ptr2, size);
+    }
+    return MemIsEqual_sse2(ptr1, ptr2, size);
 #elif MEM_ARCH_ARM64
     return MemIsEqual_neon(ptr1, ptr2, size);
 #elif MEM_ARCH_RVV
@@ -4140,9 +4096,15 @@ size_t MemFind(const void* ptr, size_t size, uint8_t value)
 {
 #if MEM_ARCH_X64
     int cpuid = MemCPUID();
-    return (cpuid & MEM_CPUID_AVX512) ? MemFind_avx512(ptr, size, value)
-         : (cpuid & MEM_CPUID_AVX2)   ? MemFind_avx2(ptr, size, value)
-         :                              MemFind_sse2(ptr, size, value);
+    if (cpuid & MEM_CPUID_AVX512)
+    {
+        return MemFind_avx512(ptr, size, value);
+    }
+    else if (cpuid & MEM_CPUID_AVX2)
+    {
+        return MemFind_avx2(ptr, size, value);
+    }
+    return MemFind_sse2(ptr, size, value);
 #elif MEM_ARCH_ARM64
     return MemFind_neon(ptr, size, value);
 #elif MEM_ARCH_RVV
@@ -4156,9 +4118,15 @@ size_t MemFindNot(const void* ptr, size_t size, uint8_t value)
 {
 #if MEM_ARCH_X64
     int cpuid = MemCPUID();
-    return (cpuid & MEM_CPUID_AVX512) ? MemFindNot_avx512(ptr, size, value)
-         : (cpuid & MEM_CPUID_AVX2)   ? MemFindNot_avx2(ptr, size, value)
-         :                              MemFindNot_sse2(ptr, size, value);
+    if (cpuid & MEM_CPUID_AVX512)
+    {
+        return MemFindNot_avx512(ptr, size, value);
+    }
+    else if (cpuid & MEM_CPUID_AVX2)
+    {
+        return MemFindNot_avx2(ptr, size, value);
+    }
+    return MemFindNot_sse2(ptr, size, value);
 #elif MEM_ARCH_ARM64
     return MemFindNot_neon(ptr, size, value);
 #elif MEM_ARCH_RVV
@@ -4167,7 +4135,5 @@ size_t MemFindNot(const void* ptr, size_t size, uint8_t value)
     return MemFindNot_generic(ptr, size, value);
 #endif
 }
-
-#endif
 
 #endif // defined(MEM_STATIC) || defined(MEM_IMPLEMENTATION)
