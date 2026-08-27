@@ -3903,26 +3903,40 @@ bool MemIsEqual_generic(const void* ptr1, const void* ptr2, size_t size)
     return true;
 }
 
-static inline uint64_t MemByteMask8(uint64_t value, uint8_t byte)
+static inline uint64_t MemZeroMask8(uint64_t x)
 {
     const uint64_t splat = ~0ULL / 255;
     const uint64_t msb = 0x80 * splat;
     const uint64_t lsb = 0x01 * splat;
 
-    uint64_t x = value ^ (byte * splat);
+    // returns 8 bytes of 0x80 if byte was zero, otherwise 0x00
     return (x - lsb) & (~x) & msb;
+}
+
+static inline uint64_t MemNonZeroMask8(uint64_t x)
+{
+    const uint64_t splat = ~0ULL / 255;
+    const uint64_t msb = 0x80 * splat;
+    const uint64_t lsb = 0x01 * splat;
+
+    // returns 8 bytes of 0x80 if byte is non-zero, otherwise 0x00
+    // ~((x-lsb) & (~x)) & msb = (~(x-lsb) | x) & msb
+    // and compiler transforms ~(x-lsb) = lsb-x-1 and folds -1 into lsb constant
+    // resulting in only 3 operations: ((c-x) | x) & msb
+    return (~(x - lsb) | x) & msb;
 }
 
 size_t MemFind_generic(const void* ptr, size_t size, uint8_t value)
 {
     const uint8_t* p = (const uint8_t*)ptr;
 
+    const uint64_t value8 = value * (~0ULL / 255);
     size_t offset = 0;
 
     while (size >= 8)
     {
         uint64_t a = MEM_PTR64U(p);
-        uint64_t m = MemByteMask8(a, value);
+        uint64_t m = MemZeroMask8(a ^ value8);
         if (m)
         {
             return offset + (MEM_CTZ64(m) / 8);
@@ -3938,7 +3952,7 @@ size_t MemFind_generic(const void* ptr, size_t size, uint8_t value)
         uint64_t a0 = MEM_PTR32U(p);
         uint64_t a1 = MEM_PTR32U(p + size - 4);
         uint64_t a = a0 | (a1 << 32);
-        uint64_t m = MemByteMask8(a, value);
+        uint64_t m = MemZeroMask8(a ^ value8);
 
         size_t index = (m ? MEM_CTZ64(m) : 64) / 8;
 
@@ -3952,7 +3966,7 @@ size_t MemFind_generic(const void* ptr, size_t size, uint8_t value)
         uint32_t a0 = MEM_PTR16U(p);
         uint32_t a1 = MEM_PTR16U(p + size - 2);
         uint32_t a = a0 | (a1 << 16);
-        uint32_t m = (uint32_t)MemByteMask8(a, value);
+        uint32_t m = (uint32_t)MemZeroMask8(a ^ value8);
 
         size_t index = (m ? MEM_CTZ32(m) : 32) / 8;
 
@@ -3973,14 +3987,15 @@ size_t MemFindNot_generic(const void* ptr, size_t size, uint8_t value)
 {
     const uint8_t* p = (const uint8_t*)ptr;
 
+    const uint64_t value8 = value * (~0ULL / 255);
     size_t offset = 0;
 
     while (size >= 8)
     {
-        uint64_t a = MEM_PTR64U(p);
-        uint64_t m = MemByteMask8(a, value) ^ 0x8080808080808080;
-        if (m)
+        uint64_t a = MEM_PTR64U(p) ^ value8;
+        if (a)
         {
+            uint64_t m = MemNonZeroMask8(a);
             return offset + (MEM_CTZ64(m) / 8);
         }
 
@@ -3994,7 +4009,7 @@ size_t MemFindNot_generic(const void* ptr, size_t size, uint8_t value)
         uint64_t a0 = MEM_PTR32U(p);
         uint64_t a1 = MEM_PTR32U(p + size - 4);
         uint64_t a = a0 | (a1 << 32);
-        uint64_t m = MemByteMask8(a, value) ^ 0x8080808080808080;
+        uint64_t m = MemNonZeroMask8(a ^ value8);
 
         size_t index = (m ? MEM_CTZ64(m) : 64) / 8;
 
@@ -4008,7 +4023,7 @@ size_t MemFindNot_generic(const void* ptr, size_t size, uint8_t value)
         uint32_t a0 = MEM_PTR16U(p);
         uint32_t a1 = MEM_PTR16U(p + size - 2);
         uint32_t a = a0 | (a1 << 16);
-        uint32_t m = (uint32_t)MemByteMask8(a, value) ^ 0x80808080;
+        uint32_t m = (uint32_t)MemNonZeroMask8(a ^ value8);
 
         size_t index = (m ? MEM_CTZ32(m) : 32) / 8;
 
