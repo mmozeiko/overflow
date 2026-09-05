@@ -351,7 +351,7 @@ static void sha256_process_arm64(uint32_t* state, const uint8_t* block, size_t c
         /* update message schedule */                                       \
         if (i >= 4) m0 = vsha256su1q_u32(vsha256su0q_u32(m0, m1), m2, m3);  \
         /* add round constants */                                           \
-        uint32x4_t tmp = vaddq_u32(m0, rk.val[i%4]);                        \
+        uint32x4_t tmp = vaddq_u32(m0, rk[i/4].val[i%4]);                   \
         /* 4 round functions */                                             \
         uint32x4x2_t x = s;                                                 \
         s.val[0] = vsha256hq_u32(x.val[0], x.val[1], tmp);                  \
@@ -360,6 +360,15 @@ static void sha256_process_arm64(uint32_t* state, const uint8_t* block, size_t c
 
     // load initial state
     uint32x4x2_t s = vld1q_u32_x2(state);
+
+    // round keys
+    uint32x4x4_t rk[] =
+    {
+        vld1q_u32_x4(&SHA256_K[0*16]),
+        vld1q_u32_x4(&SHA256_K[1*16]),
+        vld1q_u32_x4(&SHA256_K[2*16]),
+        vld1q_u32_x4(&SHA256_K[3*16]),
+    };
 
     do
     {
@@ -376,27 +385,21 @@ static void sha256_process_arm64(uint32_t* state, const uint8_t* block, size_t c
         uint32x4_t w2 = vreinterpretq_u32_u8(vrev32q_u8(msg.val[2]));
         uint32x4_t w3 = vreinterpretq_u32_u8(vrev32q_u8(msg.val[3]));
 
-        uint32x4x4_t rk;
-
-        rk = vld1q_u32_x4(&SHA256_K[0]);
         QROUND( 0, w0, w1, w2, w3);
         QROUND( 1, w1, w2, w3, w0);
         QROUND( 2, w2, w3, w0, w1);
         QROUND( 3, w3, w0, w1, w2);
 
-        rk = vld1q_u32_x4(&SHA256_K[16]);
         QROUND( 4, w0, w1, w2, w3);
         QROUND( 5, w1, w2, w3, w0);
         QROUND( 6, w2, w3, w0, w1);
         QROUND( 7, w3, w0, w1, w2);
 
-        rk = vld1q_u32_x4(&SHA256_K[32]);
         QROUND( 8, w0, w1, w2, w3);
         QROUND( 9, w1, w2, w3, w0);
         QROUND(10, w2, w3, w0, w1);
         QROUND(11, w3, w0, w1, w2);
 
-        rk = vld1q_u32_x4(&SHA256_K[48]);
         QROUND(12, w0, w1, w2, w3);
         QROUND(13, w1, w2, w3, w0);
         QROUND(14, w2, w3, w0, w1);
