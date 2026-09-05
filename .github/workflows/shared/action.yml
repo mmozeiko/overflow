@@ -86,7 +86,7 @@ runs:
         echo SDE=-${{ inputs.sde }} >> "%GITHUB_ENV%"
 
     - name: SDE on linux/x64
-      if: ${{ inputs.os == 'linux' && inputs.arch == 'x64' && steps.sde-cache.outputs.cache-hit != 'true' }}
+      if: ${{ (inputs.os == 'linux' || inputs.os == 'mingw') && inputs.arch == 'x64' && steps.sde-cache.outputs.cache-hit != 'true' }}
       shell: bash
       run: |
         curl -sfLO https://github.com/BasedInc/sde/releases/download/v${{ inputs.sde_version }}/sde-external-${{ inputs.sde_version_full }}-lin.tar.xz
@@ -95,7 +95,7 @@ runs:
         mv sde-external-${{ inputs.sde_version_full }}-lin sde
 
     - name: SDE on linux/x64 env
-      if: ${{ inputs.os == 'linux' && inputs.arch == 'x64' && inputs.sde != '' }}
+      if: ${{ (inputs.os == 'linux' || inputs.os == 'mingw') && inputs.arch == 'x64' && inputs.sde != '' }}
       shell: bash
       run: |
         echo PATH=$(pwd)/sde:${PATH} >> "${GITHUB_ENV}"

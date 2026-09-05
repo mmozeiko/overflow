@@ -129,6 +129,11 @@ function xrun()
     [[ ${CC} == "gcc"   ]] && BUILD+=("x86_64-w64-mingw32-gcc")
     [[ ${CC} == "clang" ]] && BUILD+=("${CLANG} -fuse-ld=lld -target x86_64-w64-mingw32")
 
+    if [[ ${SDE:-} != "" ]]; then
+      RUN+=("sde64" "${SDE}" "--")
+      sde64 -version | head -1
+    fi
+
     BUILD+=("-D__USE_MINGW_ANSI_STDIO=1 -Wno-format")
     RUN+=("env WINEDEBUG=-all wine")
     env WINEDEBUG=-all wine --version
