@@ -25,7 +25,7 @@ jobs:
           - { os: macos,   cc: clang, arch: x64,    runs: macos-26-intel        }
           - { os: macos,   cc: clang, arch: arm64,  runs: macos-26              }
           - { os: mingw,   cc: clang, arch: x64,    runs: ubuntu-26.04          }
-#          - { os: mingw,   cc: gcc,   arch: x64,    runs: ubuntu-26.04          }
+          - { os: mingw,   cc: gcc,   arch: x64,    runs: ubuntu-26.04          }
           - { os: wasi,    cc: clang, arch: wasm32, runs: ubuntu-26.04          }
 
     name: ${{ matrix.os }}-${{ matrix.cc }}-${{ matrix.arch }}

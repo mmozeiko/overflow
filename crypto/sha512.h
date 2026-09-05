@@ -138,6 +138,17 @@ static const uint64_t SHA512_K[80] =
 #   define SHA512_XGETBV(x)            _xgetbv(x)
 #endif
 
+#if defined(__clang__) || (defined(__GNUC__) && (__GNUC__ >= 14))
+#   define SHA512_TARGET_STR "avx2,sha512"
+#elif defined(__GNUC__)
+#   define _mm256_sha512msg1_epi64(a, b)     ({ __m256i r; __asm__("vsha512msg1  %x2,%t0"     : "=x"(r) : "0"(a), "x"(b));         r; })
+#   define _mm256_sha512msg2_epi64(a, b)     ({ __m256i r; __asm__("vsha512msg2  %t2,%t0"     : "=x"(r) : "0"(a), "x"(b));         r; })
+#   define _mm256_sha512rnds2_epi64(a, b, c) ({ __m256i r; __asm__("vsha512rnds2 %x3,%t2,%t0" : "=x"(r) : "0"(a), "x"(b), "x"(c)); r; })
+#   define SHA512_TARGET_STR "avx2"
+#else
+#   define SHA512_TARGET_STR
+#endif
+
 #define SHA512_CPUID_INIT    (1 << 0)
 #define SHA512_CPUID_VSHA512 (1 << 1)
 
@@ -183,7 +194,7 @@ static inline int sha512_cpuid(void)
     return result;
 }
 
-SHA512_TARGET("avx2,sha512")
+SHA512_TARGET(SHA512_TARGET_STR)
 static void sha512_process_vsha512(uint64_t* state, const uint8_t* block, size_t count)
 {
     // pretty much same way how sha256 works, only with avx2 registers and 64-bit additions
