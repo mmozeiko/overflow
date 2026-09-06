@@ -128,14 +128,18 @@ static const uint32_t SHA256_K[64] =
 
 #if defined(__clang__) || defined(__GNUC__)
 #   include <cpuid.h>
-#   define SHA256_TARGET(str)          __attribute__((target(str)))
-#   define SHA256_CPUID(x, info)       __cpuid(x, info[0], info[1], info[2], info[3])
-#   define SHA256_CPUID_EX(x, y, info) __cpuid_count(x, y, info[0], info[1], info[2], info[3])
+#   define SHA256_TARGET(str)               __attribute__((target(str)))
+#   define SHA256_CPUID(x, info)            __cpuid(x, info[0], info[1], info[2], info[3])
+#   define SHA256_CPUID2(x, y, info)        __cpuid_count(x, y, info[0], info[1], info[2], info[3])
+#   define SHA256_GET32_RELAXED(ptr)        __atomic_load_n(ptr, __ATOMIC_RELAXED)
+#   define SHA256_SET32_RELAXED(ptr, value) __atomic_store_n(ptr, value, __ATOMIC_RELAXED)
 #else
 #   include <intrin.h>
 #   define SHA256_TARGET(str)
-#   define SHA256_CPUID(x, info)       __cpuid(info, x)
-#   define SHA256_CPUID_EX(x, y, info) __cpuidex(info, x, y)
+#   define SHA256_CPUID(x, info)            __cpuid(info, x)
+#   define SHA256_CPUID2(x, y, info)        __cpuidex(info, x, y)
+#   define SHA256_GET32_RELAXED(ptr)        __iso_volatile_load32(ptr)
+#   define SHA256_SET32_RELAXED(ptr, value) __iso_volatile_store32(ptr, value)
 #endif
 
 #define SHA256_CPUID_INIT  (1 << 0)
@@ -145,7 +149,7 @@ static inline int sha256_cpuid(void)
 {
     static int cpuid;
 
-    int result = cpuid;
+    int result = SHA256_GET32_RELAXED(&cpuid);
     if (result == 0)
     {
         int info[4];
@@ -153,16 +157,13 @@ static inline int sha256_cpuid(void)
         SHA256_CPUID(1, info);
         int has_ssse3 = info[3] & (1 << 9);
 
-        SHA256_CPUID_EX(7, 0, info);
+        SHA256_CPUID2(7, 0, info);
         int has_shani = info[1] & (1 << 29);
 
         result |= SHA256_CPUID_INIT;
-        if (has_ssse3 && has_shani)
-        {
-            result |= SHA256_CPUID_SHANI;
-        }
+        result |= (has_ssse3 && has_shani) ? SHA256_CPUID_SHANI : 0;
 
-        cpuid = result;
+        SHA256_SET32_RELAXED(&cpuid, result);
     }
 
 #if defined(SHA256_CPUID_MASK)
@@ -293,6 +294,15 @@ static void sha256_process_shani(uint32_t* state, const uint8_t* block, size_t c
 
 #include <arm_neon.h>
 
+#if defined(__clang__) || defined(__GNUC__)
+#   define SHA256_GET32_RELAXED(ptr)        __atomic_load_n(ptr, __ATOMIC_RELAXED)
+#   define SHA256_SET32_RELAXED(ptr, value) __atomic_store_n(ptr, value, __ATOMIC_RELAXED)
+#else
+#   include <intrin.h>
+#   define SHA256_GET32_RELAXED(ptr)        __iso_volatile_load32(ptr)
+#   define SHA256_SET32_RELAXED(ptr, value) __iso_volatile_store32(ptr, value)
+#endif
+
 #if defined(_WIN32)
 #   include <windows.h>
 #elif defined(__linux__)
@@ -312,7 +322,7 @@ static inline int sha256_cpuid(void)
 #else
     static int cpuid;
 
-    int result = cpuid;
+    int result = SHA256_GET32_RELAXED(&cpuid);
     if (result == 0)
     {
 #if defined(_WIN32)
@@ -328,12 +338,9 @@ static inline int sha256_cpuid(void)
 #error unknown platform
 #endif
         result |= SHA256_CPUID_INIT;
-        if (has_arm64)
-        {
-            result |= SHA256_CPUID_ARM64;
-        }
+        result |= has_arm64 ? SHA256_CPUID_ARM64 : 0;
 
-        cpuid = result;
+        SHA256_SET32_RELAXED(&cpuid, result);
     }
 #endif
 

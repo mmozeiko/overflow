@@ -100,14 +100,18 @@ static inline void sha1_finish(sha1_ctx* ctx, uint8_t digest[SHA1_DIGEST_SIZE]);
 
 #if defined(__clang__) || defined(__GNUC__)
 #   include <cpuid.h>
-#   define SHA1_TARGET(str)          __attribute__((target(str)))
-#   define SHA1_CPUID(x, info)       __cpuid(x, info[0], info[1], info[2], info[3])
-#   define SHA1_CPUID_EX(x, y, info) __cpuid_count(x, y, info[0], info[1], info[2], info[3])
+#   define SHA1_TARGET(str)               __attribute__((target(str)))
+#   define SHA1_CPUID(x, info)            __cpuid(x, info[0], info[1], info[2], info[3])
+#   define SHA1_CPUID2(x, y, info)        __cpuid_count(x, y, info[0], info[1], info[2], info[3])
+#   define SHA1_GET32_RELAXED(ptr)        __atomic_load_n(ptr, __ATOMIC_RELAXED)
+#   define SHA1_SET32_RELAXED(ptr, value) __atomic_store_n(ptr, value, __ATOMIC_RELAXED)
 #else
 #   include <intrin.h>
 #   define SHA1_TARGET(str)
-#   define SHA1_CPUID(x, info)       __cpuid(info, x)
-#   define SHA1_CPUID_EX(x, y, info) __cpuidex(info, x, y)
+#   define SHA1_CPUID(x, info)            __cpuid(info, x)
+#   define SHA1_CPUID2(x, y, info)        __cpuidex(info, x, y)
+#   define SHA1_GET32_RELAXED(ptr)        __iso_volatile_load32(ptr)
+#   define SHA1_SET32_RELAXED(ptr, value) __iso_volatile_store32(ptr, value)
 #endif
 
 // workaround for issue with older clang -fno-lax-vector-conversions
@@ -124,7 +128,7 @@ static inline int sha1_cpuid(void)
 {
     static int cpuid;
 
-    int result = cpuid;
+    int result = SHA1_GET32_RELAXED(&cpuid);
     if (result == 0)
     {
         int info[4];
@@ -132,16 +136,13 @@ static inline int sha1_cpuid(void)
         SHA1_CPUID(1, info);
         int has_ssse3 = info[3] & (1 << 9);
 
-        SHA1_CPUID_EX(7, 0, info);
+        SHA1_CPUID2(7, 0, info);
         int has_shani = info[1] & (1 << 29);
 
         result |= SHA1_CPUID_INIT;
-        if (has_ssse3 && has_shani)
-        {
-            result |= SHA1_CPUID_SHANI;
-        }
+        result |= (has_ssse3 && has_shani) ? SHA1_CPUID_SHANI : 0;
 
-        cpuid = result;
+        SHA1_SET32_RELAXED(&cpuid, result);
     }
 
 #if defined(SHA1_CPUID_MASK)
@@ -296,6 +297,15 @@ static void sha1_process_shani(uint32_t* state, const uint8_t* block, size_t cou
 
 #include <arm_neon.h>
 
+#if defined(__clang__) || defined(__GNUC__)
+#   define SHA1_GET32_RELAXED(ptr)        __atomic_load_n(ptr, __ATOMIC_RELAXED)
+#   define SHA1_SET32_RELAXED(ptr, value) __atomic_store_n(ptr, value, __ATOMIC_RELAXED)
+#else
+#   include <intrin.h>
+#   define SHA1_GET32_RELAXED(ptr)        __iso_volatile_load32(ptr)
+#   define SHA1_SET32_RELAXED(ptr, value) __iso_volatile_store32(ptr, value)
+#endif
+
 #if defined(_WIN32)
 #   include <windows.h>
 #elif defined(__linux__)
@@ -315,7 +325,7 @@ static inline int sha1_cpuid(void)
 #else
     static int cpuid;
 
-    int result = cpuid;
+    int result = SHA1_GET32_RELAXED(&cpuid);
     if (result == 0)
     {
 #if defined(_WIN32)
@@ -331,12 +341,9 @@ static inline int sha1_cpuid(void)
 #error unknown platform
 #endif
         result |= SHA1_CPUID_INIT;
-        if (has_arm64)
-        {
-            result |= SHA1_CPUID_ARM64;
-        }
+        result |= has_arm64 ? SHA1_CPUID_ARM64 : 0;
 
-        cpuid = result;
+        SHA1_SET32_RELAXED(&cpuid, result);
     }
 #endif
 

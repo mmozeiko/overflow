@@ -126,16 +126,20 @@ static const uint64_t SHA512_K[80] =
 
 #if defined(__clang__) || defined(__GNUC__)
 #   include <cpuid.h>
-#   define SHA512_TARGET(str)          __attribute__((target(str)))
-#   define SHA512_CPUID(x, info)       __cpuid(x, info[0], info[1], info[2], info[3])
-#   define SHA512_CPUID_EX(x, y, info) __cpuid_count(x, y, info[0], info[1], info[2], info[3])
-#   define SHA512_XGETBV(x)            __builtin_ia32_xgetbv(x)
+#   define SHA512_TARGET(str)               __attribute__((target(str)))
+#   define SHA512_CPUID(x, info)            __cpuid(x, info[0], info[1], info[2], info[3])
+#   define SHA512_CPUID2(x, y, info)        __cpuid_count(x, y, info[0], info[1], info[2], info[3])
+#   define SHA512_XGETBV(x)                 __builtin_ia32_xgetbv(x)
+#   define SHA512_GET32_RELAXED(ptr)        __atomic_load_n(ptr, __ATOMIC_RELAXED)
+#   define SHA512_SET32_RELAXED(ptr, value) __atomic_store_n(ptr, value, __ATOMIC_RELAXED)
 #else
 #   include <intrin.h>
 #   define SHA512_TARGET(str)
-#   define SHA512_CPUID(x, info)       __cpuid(info, x)
-#   define SHA512_CPUID_EX(x, y, info) __cpuidex(info, x, y)
-#   define SHA512_XGETBV(x)            _xgetbv(x)
+#   define SHA512_CPUID(x, info)            __cpuid(info, x)
+#   define SHA512_CPUID2(x, y, info)        __cpuidex(info, x, y)
+#   define SHA512_XGETBV(x)                 _xgetbv(x)
+#   define SHA512_GET32_RELAXED(ptr)        __iso_volatile_load32(ptr)
+#   define SHA512_SET32_RELAXED(ptr, value) __iso_volatile_store32(ptr, value)
 #endif
 
 #if defined(__clang__) || (defined(__GNUC__) && (__GNUC__ >= 14))
@@ -157,7 +161,7 @@ static inline int sha512_cpuid(void)
 {
     static int cpuid;
 
-    int result = cpuid;
+    int result = SHA512_GET32_RELAXED(&cpuid);
     if (result == 0)
     {
         int info[4];
@@ -165,26 +169,19 @@ static inline int sha512_cpuid(void)
         SHA512_CPUID(1, info);
         int has_xsave = info[2] & (1 << 26);
 
-        int has_ymm = 0;
-        if (has_xsave)
-        {
-            uint64_t xcr0 = SHA512_XGETBV(0);
-            has_ymm = xcr0 & (1 << 2);
-        }
-
-        SHA512_CPUID_EX(7, 0, info);
+        SHA512_CPUID2(7, 0, info);
         int has_avx2 = info[1] & (1 << 5);
 
-        SHA512_CPUID_EX(7, 1, info);
+        SHA512_CPUID2(7, 1, info);
         int has_sha512 = info[0] & (1 << 0);
 
-        result |= SHA512_CPUID_INIT;
-        if (has_ymm && has_avx2 && has_sha512)
-        {
-            result |= SHA512_CPUID_VSHA512;
-        }
+        uint64_t xcr0 = has_xsave ? SHA512_XGETBV(0) : 0;
+        int has_ymm = (xcr0 & 0x04) == 0x04;
 
-        cpuid = result;
+        result |= SHA512_CPUID_INIT;
+        result |= (has_ymm && has_avx2 && has_sha512) ? SHA512_CPUID_VSHA512 : 0;
+
+        SHA512_SET32_RELAXED(&cpuid, result);
     }
 
 #if defined(SHA512_CPUID_MASK)
@@ -296,6 +293,15 @@ static void sha512_process_vsha512(uint64_t* state, const uint8_t* block, size_t
 
 #include <arm_neon.h>
 
+#if defined(__clang__) || defined(__GNUC__)
+#   define SHA512_GET32_RELAXED(ptr)        __atomic_load_n(ptr, __ATOMIC_RELAXED)
+#   define SHA512_SET32_RELAXED(ptr, value) __atomic_store_n(ptr, value, __ATOMIC_RELAXED)
+#else
+#   include <intrin.h>
+#   define SHA512_GET32_RELAXED(ptr)        __iso_volatile_load32(ptr)
+#   define SHA512_SET32_RELAXED(ptr, value) __iso_volatile_store32(ptr, value)
+#endif
+
 #if defined(_WIN32)
 #   include <windows.h>
 #   pragma comment (lib, "advapi32")
@@ -309,10 +315,6 @@ static void sha512_process_vsha512(uint64_t* state, const uint8_t* block, size_t
 #define SHA512_CPUID_INIT  (1 << 0)
 #define SHA512_CPUID_ARM64 (1 << 1)
 
-#if defined(_WIN32)
-
-#endif
-
 static inline int sha512_cpuid(void)
 {
 #if defined(__ARM_FEATURE_SHA512)
@@ -320,7 +322,7 @@ static inline int sha512_cpuid(void)
 #else
     static int cpuid;
 
-    int result = cpuid;
+    int result = SHA512_GET32_RELAXED(&cpuid);
     if (result == 0)
     {
 #if defined(_WIN32)
@@ -341,12 +343,9 @@ static inline int sha512_cpuid(void)
 #error unknown platform
 #endif
         result |= SHA512_CPUID_INIT;
-        if (has_arm64)
-        {
-            result |= SHA512_CPUID_ARM64;
-        }
+        result |= has_arm64 ? SHA512_CPUID_ARM64 : 0;
 
-        cpuid = result;
+        SHA512_SET32_RELAXED(&cpuid, result);
     }
 #endif
 

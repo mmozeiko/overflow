@@ -101,14 +101,18 @@ static inline void md5_finish(md5_ctx* ctx, uint8_t digest[MD5_DIGEST_SIZE]);
 
 #if defined(__clang__) || defined(__GNUC__)
 #   include <cpuid.h>
-#   define MD5_TARGET(str)          __attribute__((target(str)))
-#   define MD5_CPUID_EX(x, y, info) __cpuid_count(x, y, info[0], info[1], info[2], info[3])
-#   define MD5_ANDN_U32(x,y)        (~(x) & (y))
+#   define MD5_TARGET(str)               __attribute__((target(str)))
+#   define MD5_CPUID2(x, y, info)        __cpuid_count(x, y, info[0], info[1], info[2], info[3])
+#   define MD5_GET32_RELAXED(ptr)        __atomic_load_n(ptr, __ATOMIC_RELAXED)
+#   define MD5_SET32_RELAXED(ptr, value) __atomic_store_n(ptr, value, __ATOMIC_RELAXED)
+#   define MD5_ANDN_U32(x,y)             (~(x) & (y))
 #else
 #   include <intrin.h>
 #   define MD5_TARGET(str)
-#   define MD5_CPUID_EX(x, y, info) __cpuidex(info, x, y)
-#   define MD5_ANDN_U32(x,y)        _andn_u32(x,y)
+#   define MD5_CPUID2(x, y, info)        __cpuidex(info, x, y)
+#   define MD5_GET32_RELAXED(ptr)        __iso_volatile_load32(ptr)
+#   define MD5_SET32_RELAXED(ptr, value) __iso_volatile_store32(ptr, value)
+#   define MD5_ANDN_U32(x,y)             _andn_u32(x,y)
 #endif
 
 #if defined(__clang__)
@@ -126,22 +130,19 @@ static inline int md5_cpuid(void)
 {
     static int cpuid;
 
-    int result = cpuid;
+    int result = MD5_GET32_RELAXED(&cpuid);
     if (result == 0)
     {
         int info[4];
 
-        MD5_CPUID_EX(7, 0, info);
-        int has_bmi = info[1] & (1 << 3);
+        MD5_CPUID2(7, 0, info);
+        int has_bmi  = info[1] & (1 << 3);
         int has_bmi2 = info[1] & (1 << 8);
 
         result |= MD5_CPUID_INIT;
-        if (has_bmi && has_bmi2)
-        {
-            result |= MD5_CPUID_BMI2;
-        }
+        result |= (has_bmi && has_bmi2) ? MD5_CPUID_BMI2 : 0;
 
-        cpuid = result;
+        MD5_SET32_RELAXED(&cpuid, result);
     }
 
 #if defined(MD5_CPUID_MASK)
