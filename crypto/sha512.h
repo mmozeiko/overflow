@@ -167,7 +167,7 @@ static inline int sha512_cpuid(void)
         int info[4];
 
         SHA512_CPUID(1, info);
-        int has_xsave = info[2] & (1 << 26);
+        int has_osxsave = info[2] & (1 << 27);
 
         SHA512_CPUID2(7, 0, info);
         int has_avx2 = info[1] & (1 << 5);
@@ -175,7 +175,7 @@ static inline int sha512_cpuid(void)
         SHA512_CPUID2(7, 1, info);
         int has_sha512 = info[0] & (1 << 0);
 
-        uint64_t xcr0 = has_xsave ? SHA512_XGETBV(0) : 0;
+        uint64_t xcr0 = has_osxsave ? SHA512_XGETBV(0) : 0;
         int has_ymm = (xcr0 & 0x04) == 0x04;
 
         result |= SHA512_CPUID_INIT;
