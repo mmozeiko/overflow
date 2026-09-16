@@ -65,12 +65,13 @@ MEM_API int MemCompare_neon   (const void* ptr1, const void* ptr2, size_t size);
 MEM_API int MemCompare_rvv    (const void* ptr1, const void* ptr2, size_t size);
 MEM_API int MemCompare_generic(const void* ptr1, const void* ptr2, size_t size);
 
-MEM_API int MemCompareI_sse2   (const void* ptr1, const void* ptr2, size_t size);
-MEM_API int MemCompareI_avx2   (const void* ptr1, const void* ptr2, size_t size);
-MEM_API int MemCompareI_avx512 (const void* ptr1, const void* ptr2, size_t size);
-MEM_API int MemCompareI_neon   (const void* ptr1, const void* ptr2, size_t size);
-MEM_API int MemCompareI_rvv    (const void* ptr1, const void* ptr2, size_t size);
-MEM_API int MemCompareI_generic(const void* ptr1, const void* ptr2, size_t size);
+MEM_API int MemCompareI_sse2      (const void* ptr1, const void* ptr2, size_t size);
+MEM_API int MemCompareI_avx2      (const void* ptr1, const void* ptr2, size_t size);
+MEM_API int MemCompareI_avx512    (const void* ptr1, const void* ptr2, size_t size);
+MEM_API int MemCompareI_avx512vbmi(const void* ptr1, const void* ptr2, size_t size);
+MEM_API int MemCompareI_neon      (const void* ptr1, const void* ptr2, size_t size);
+MEM_API int MemCompareI_rvv       (const void* ptr1, const void* ptr2, size_t size);
+MEM_API int MemCompareI_generic   (const void* ptr1, const void* ptr2, size_t size);
 
 MEM_API bool MemIsEqual_sse2   (const void* ptr1, const void* ptr2, size_t size);
 MEM_API bool MemIsEqual_avx2   (const void* ptr1, const void* ptr2, size_t size);
@@ -178,14 +179,14 @@ typedef struct { uint64_t value; } MemUnalignedPtr64;
 #  define MEM_BSWAP64(x) _byteswap_uint64(x)
 #endif
 
-// count trailing zeroes
+// count trailing zeroes, input value must never be 0
 #if MEM_COMPILER_CLANG || MEM_COMPILER_GCC
 #  define MEM_CTZ32(x) (size_t)__builtin_ctz(x)
 #  define MEM_CTZ64(x) (size_t)__builtin_ctzll(x)
 #elif MEM_COMPILER_MSVC
 #  if MEM_ARCH_X64
-#    define MEM_CTZ32(x) (size_t)_tzcnt_u32(x)
-#    define MEM_CTZ64(x) (size_t)_tzcnt_u64(x)
+#    define MEM_CTZ32(x) (size_t)_tzcnt_u32(x) // this unconditionally uses BMI instructions, because they are
+#    define MEM_CTZ64(x) (size_t)_tzcnt_u64(x) // backwards compatible with REP BSF encoding for non-zero input
 #  elif MEM_ARCH_ARM64
 #    define MEM_CTZ32(x) (size_t)_CountTrailingZeros(x)
 #    define MEM_CTZ64(x) (size_t)_CountTrailingZeros64(x)
@@ -203,13 +204,15 @@ typedef struct { uint64_t value; } MemUnalignedPtr64;
 
 // x64 function attributes
 #if MEM_ARCH_X64 && (MEM_COMPILER_CLANG || MEM_COMPILER_GCC)
-#  define MEM_TARGET_XSAVE  __attribute__((target("xsave")))
-#  define MEM_TARGET_AVX2   __attribute__((target("avx2,bmi,bmi2,movbe")))
-#  define MEM_TARGET_AVX512 __attribute__((target("avx512f,avx512bw,avx512vbmi,bmi,bmi2")))
+#  define MEM_TARGET_XSAVE      __attribute__((target("xsave")))
+#  define MEM_TARGET_AVX2       __attribute__((target("avx2,bmi,bmi2,movbe")))
+#  define MEM_TARGET_AVX512     __attribute__((target("avx512f,avx512bw,bmi,bmi2")))
+#  define MEM_TARGET_AVX512VBMI __attribute__((target("avx512f,avx512bw,avx512vbmi,bmi,bmi2")))
 #else
 #  define MEM_TARGET_XSAVE
 #  define MEM_TARGET_AVX2
 #  define MEM_TARGET_AVX512
+#  define MEM_TARGET_AVX512VBMI
 #endif
 
 #if MEM_COMPILER_MSVC
@@ -258,11 +261,14 @@ static inline __m256i MemToLower32(__m256i x)
 MEM_TARGET_AVX512
 static inline __m512i MemToLower64(__m512i x)
 {
-#if 0 // version without VBMI
     __m512i tmp = _mm512_sub_epi8(x, _mm512_set1_epi8('A'));
     __mmask64 mask = _mm512_cmple_epu8_mask(tmp, _mm512_set1_epi8('Z' - 'A'));
     return _mm512_mask_add_epi8(x, mask, x, _mm512_set1_epi8('a' - 'A'));
-#else
+}
+
+MEM_TARGET_AVX512VBMI
+static inline __m512i MemToLower64vbmi(__m512i x)
+{
     static const uint8_t table[] =
     {
         0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
@@ -278,7 +284,6 @@ static inline __m512i MemToLower64(__m512i x)
     const __m512i c1 = _mm512_loadu_epi8(table + 0x40);
     __mmask64 mask = _mm512_cmplt_epu8_mask(x, _mm512_set1_epi8((char)0x80));
     return _mm512_mask2_permutex2var_epi8(c0, x, mask, c1);
-#endif
 }
 
 
@@ -902,8 +907,11 @@ size_t MemFind_sse2(const void* ptr, size_t size, uint8_t value)
         size_t address = (uint32_t)(uintptr_t)p % 16;
         size_t extra = (address + size) <= 16 ? address : 0;
 
-        // will load before the beginning buffer (16-byte aligned) if end is too close
-        // to 16-byte boundary, otherwise will load past the end of buffer
+        // in case end of buffer is too close to 16-byte boundary (same as page boundary)
+        // then do load before the beginning of buffer (16-byte aligned) - thus it won't
+        // overread into potantially invalid page, but in such case it will read garbage
+        // from bytes that are before beginning of buffer (needs to masked off below)
+        // otherwise will load past the end of buffer
         __m128i a0 = _mm_loadu_si128((const __m128i*)(p - extra));
 
         // set lane to 0xff if lane matches input value, or 0x00 if not
@@ -1050,8 +1058,11 @@ size_t MemFindNot_sse2(const void* ptr, size_t size, uint8_t value)
         size_t address = (uint32_t)(uintptr_t)p % 16;
         size_t extra = (address + size) <= 16 ? address : 0;
 
-        // will load before the beginning buffer (16-byte aligned) if end is too close
-        // to 16-byte boundary, otherwise will load past the end of buffer
+        // in case end of buffer is too close to 16-byte boundary (same as page boundary)
+        // then do load before the beginning of buffer (16-byte aligned) - thus it won't
+        // overread into potantially invalid page, but in such case it will read garbage
+        // from bytes that are before beginning of buffer (needs to masked off below)
+        // otherwise will load past the end of buffer
         __m128i a0 = _mm_loadu_si128((const __m128i*)(p - extra));
 
         // set lane to 0xff if lane matches input value, or 0x00 if not
@@ -1192,7 +1203,7 @@ int MemCompare_avx2(const void* ptr1, const void* ptr2, size_t size)
     {
         const uint32_t PAGE_SIZE = 4096;
 
-        // if 32 bytes from each pointer does not cross page boundary, can safely load them as 16-byte vector
+        // if 32 bytes from each pointer does not cross page boundary, can safely load them as 32-byte vector
         uint32_t address = (uint32_t)(uintptr_t)p1 | (uint32_t)(uintptr_t)p2;
         if ((address & (PAGE_SIZE - 1)) <= PAGE_SIZE - 32)
         {
@@ -1448,7 +1459,7 @@ int MemCompareI_avx2(const void* ptr1, const void* ptr2, size_t size)
     {
         const uint32_t PAGE_SIZE = 4096;
 
-        // if 32 bytes from each pointer does not cross page boundary, can safely load them as 16-byte vector
+        // if 32 bytes from each pointer does not cross page boundary, can safely load them as 32-byte vector
         uint32_t address = (uint32_t)(uintptr_t)p1 | (uint32_t)(uintptr_t)p2;
         if ((address & (PAGE_SIZE - 1)) <= PAGE_SIZE - 32)
         {
@@ -1515,7 +1526,7 @@ int MemCompareI_avx2(const void* ptr1, const void* ptr2, size_t size)
             n = 16;
         }
 
-        // pack bytes into 16-byte simd register
+        // pack bytes into 32-byte simd register
         // a/b0 goes into low 128-bit part
         // a/b1 goes into high 128-bit part
         __m256i a = _mm256_inserti128_si256(_mm256_castsi128_si256(a0), a1, 1);
@@ -1875,8 +1886,11 @@ size_t MemFind_avx2(const void* ptr, size_t size, uint8_t value)
         size_t address = (uint32_t)(uintptr_t)p % 32;
         size_t extra = (address + size) <= 32 ? address : 0;
 
-        // will load before the beginning buffer (32-byte aligned) if end is too close
-        // to 32-byte boundary, otherwise will load past the end of buffer
+        // in case end of buffer is too close to 32-byte boundary (same as page boundary)
+        // then do load before the beginning of buffer (32-byte aligned) - thus it won't
+        // overread into potantially invalid page, but in such case it will read garbage
+        // from bytes that are before beginning of buffer (needs to masked off below)
+        // otherwise will load past the end of buffer
         __m256i a0 = _mm256_loadu_si256((const __m256i*)(p - extra));
 
         // set lane to 0xff if lane matches input value, or 0x00 if not
@@ -1889,7 +1903,7 @@ size_t MemFind_avx2(const void* ptr, size_t size, uint8_t value)
         // this will result in returning "size" value if all bytes are same as input value
         m |= (uint32_t)(1ULL << size);
 
-        // return index of first bit set, which will be index of first byte different from input value
+        // return index of first bit set, which will be index of first byte matching input value
         return _tzcnt_u32(m);
     }
 
@@ -2035,11 +2049,14 @@ size_t MemFindNot_avx2(const void* ptr, size_t size, uint8_t value)
         size_t address = (uint32_t)(uintptr_t)p % 32;
         size_t extra = (address + size) <= 32 ? address : 0;
 
-        // will load before the beginning buffer (32-byte aligned) if end is too close
-        // to 32-byte boundary, otherwise will load past the end of buffer
+        // in case end of buffer is too close to 32-byte boundary (same as page boundary)
+        // then do load before the beginning of buffer (32-byte aligned) - thus it won't
+        // overread into potantially invalid page, but in such case it will read garbage
+        // from bytes that are before beginning of buffer (needs to masked off below)
+        // otherwise will load past the end of buffer
         __m256i a0 = _mm256_loadu_si256((const __m256i*)(p - extra));
-        // set lane to 0xff if lane matches input value, or 0x00 if not
 
+        // set lane to 0xff if lane matches input value, or 0x00 if not
         __m256i r0 = _mm256_cmpeq_epi8(value32, a0);
 
         // add 1 to flip lowest 0 bit (non-equal position) to 1, changing all bits below it to 0
@@ -2050,7 +2067,7 @@ size_t MemFindNot_avx2(const void* ptr, size_t size, uint8_t value)
         // this will result in returning "size" value if inputs are equal
         m |= (uint32_t)(1ULL << size);
 
-        // return index of first bit set, which will be index of first byte matching input value
+        // return index of first bit set, which will be index of first byte not matching input value
         return _tzcnt_u32(m);
     }
 
@@ -2334,6 +2351,100 @@ int MemCompareI_avx512(const void* ptr1, const void* ptr2, size_t size)
         __m512i b0 = MemToLower64(_mm512_loadu_epi8(p2 + 0x00));
         __m512i a1 = MemToLower64(_mm512_loadu_epi8(p1 + 0x40));
         __m512i b1 = MemToLower64(_mm512_loadu_epi8(p2 + 0x40));
+
+        // check if any bytes are different
+        __mmask64 m0 = _mm512_cmpneq_epu8_mask(a0, b0);
+        __mmask64 m1 = _mm512_cmpneq_epu8_mask(a1, b1);
+        if (!_kortestz_mask64_u8(m0, m1))
+        {
+            // if they are different, then find position of byte that is less than other value
+            int r10 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(a0, b0)));
+            int r20 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(b0, a0)));
+            int r11 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(a1, b1)));
+            int r21 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(b1, a1)));
+
+            // if low 64 bytes are the same, use indices for high 64 bytes
+            int r1 = (r10 == r20) ? r11 : r10;
+            int r2 = (r10 == r20) ? r21 : r20;
+
+            // return signed difference which is comparison result
+            return r1 - r2;
+        }
+
+        size -= 128;
+        p1 += 128;
+        p2 += 128;
+    }
+
+    // no differences found, inputs are equal
+    return 0;
+}
+
+MEM_TARGET_AVX512VBMI
+int MemCompareI_avx512vbmi(const void* ptr1, const void* ptr2, size_t size)
+{
+    const uint8_t* p1 = (const uint8_t*)ptr1;
+    const uint8_t* p2 = (const uint8_t*)ptr2;
+
+    // first handle any non-multiple of 64 size, so code later can deal with 64-byte multiple sizes
+    size_t extra = size & 63;
+    if (extra)
+    {
+        //  mask to load "extra" amount of bytes
+        __mmask64 mask = _cvtu64_mask64(_bzhi_u64(~0ULL, (uint32_t)extra));
+
+        // do masked load & convert to lowercase
+        __m512i a = MemToLower64vbmi(_mm512_maskz_loadu_epi8(mask, p1));
+        __m512i b = MemToLower64vbmi(_mm512_maskz_loadu_epi8(mask, p2));
+
+        // check if any bytes are different
+        __mmask64 m = _mm512_cmpneq_epu8_mask(a, b);
+        if (!_kortestz_mask64_u8(m, m))
+        {
+            // if they are different, then find position of byte that is less than other value
+            int r1 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(a, b)));
+            int r2 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(b, a)));
+
+            // return signed difference which is comparison result
+            return r1 - r2;
+        }
+
+        size -= extra;
+        p1 += extra;
+        p2 += extra;
+    }
+
+    // now size is multiple of 64 bytes, handle case when it is not 128-byte multiple
+    if (size & 64)
+    {
+        // 64 byte loads & convert to lowercase
+        __m512i a = MemToLower64vbmi(_mm512_loadu_epi8(p1));
+        __m512i b = MemToLower64vbmi(_mm512_loadu_epi8(p2));
+
+        // check if any bytes are different
+        __mmask64 m = _mm512_cmpneq_epu8_mask(a, b);
+        if (!_kortestz_mask64_u8(m, m))
+        {
+            // if they are different, then find position of byte that is less than other value
+            int r1 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(a, b)));
+            int r2 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(b, a)));
+
+            // return signed difference which is comparison result
+            return r1 - r2;
+        }
+
+        size -= 64;
+        p1 += 64;
+        p2 += 64;
+    }
+
+    // now size is 128-byte multiple, process rest of them in 128-byte blocks
+    while (size)
+    {
+        __m512i a0 = MemToLower64vbmi(_mm512_loadu_epi8(p1 + 0x00));
+        __m512i b0 = MemToLower64vbmi(_mm512_loadu_epi8(p2 + 0x00));
+        __m512i a1 = MemToLower64vbmi(_mm512_loadu_epi8(p1 + 0x40));
+        __m512i b1 = MemToLower64vbmi(_mm512_loadu_epi8(p2 + 0x40));
 
         // check if any bytes are different
         __mmask64 m0 = _mm512_cmpneq_epu8_mask(a0, b0);
@@ -3194,8 +3305,11 @@ size_t MemFind_neon(const void* ptr, size_t size, uint8_t value)
         size_t address = (uint32_t)(uintptr_t)p % 16;
         size_t extra = (address + size) <= 16 ? address : 0;
 
-        // will load before the beginning buffer (16-byte aligned) if end is too close
-        // to 16-byte boundary, otherwise will load past the end of buffer
+        // in case end of buffer is too close to 16-byte boundary (same as page boundary)
+        // then do load before the beginning of buffer (16-byte aligned) - thus it won't
+        // overread into potantially invalid page, but in such case it will read garbage
+        // from bytes that are before beginning of buffer (needs to masked off below)
+        // otherwise will load past the end of buffer
         uint8x16_t a = vld1q_u8(p - extra);
 
         // set lane to 0xff if lane matches input value, or 0x00 if not
@@ -3373,8 +3487,11 @@ size_t MemFindNot_neon(const void* ptr, size_t size, uint8_t value)
         size_t address = (uint32_t)(uintptr_t)p % 16;
         size_t extra = (address + size) <= 16 ? address : 0;
 
-        // will load before the beginning buffer (16-byte aligned) if end is too close
-        // to 16-byte boundary, otherwise will load past the end of buffer
+        // in case end of buffer is too close to 16-byte boundary (same as page boundary)
+        // then do load before the beginning of buffer (16-byte aligned) - thus it won't
+        // overread into potantially invalid page, but in such case it will read garbage
+        // from bytes that are before beginning of buffer (needs to masked off below)
+        // otherwise will load past the end of buffer
         uint8x16_t a = vld1q_u8(p - extra);
 
         // set lane to 0x00 if lane matches input value, or 0xff if not
@@ -3687,9 +3804,10 @@ size_t MemFindNot_rvv(const void* ptr, size_t size, uint8_t value)
 
 #if MEM_ARCH_X64
 
-#define MEM_CPUID_INIT   (1 << 0)
-#define MEM_CPUID_AVX2   (1 << 1)
-#define MEM_CPUID_AVX512 (1 << 2)
+#define MEM_CPUID_INIT       (1 << 0)
+#define MEM_CPUID_AVX2       (1 << 1)
+#define MEM_CPUID_AVX512     (1 << 2)
+#define MEM_CPUID_AVX512VBMI (1 << 3)
 
 MEM_TARGET_XSAVE
 static int MemDoCPUID(void)
@@ -3697,8 +3815,8 @@ static int MemDoCPUID(void)
     int info[4];
 
     MEM_CPUID(1, info);
-    int movbe = info[2] & (1 << 22);
-    int xsave = info[2] & (1 << 26);
+    int movbe   = info[2] & (1 << 22);
+    int osxsave = info[2] & (1 << 27);
 
     MEM_CPUID2(7, 0, info);
     int bmi1 = info[1] & (1 << 3);
@@ -3709,13 +3827,14 @@ static int MemDoCPUID(void)
     int avx512bw   = info[1] & (1 << 30);
     int avx512vbmi = info[2] & (1 << 1);
 
-    uint64_t xcr0 = xsave ? MEM_XGETBV(0) : 0;
+    uint64_t xcr0 = osxsave ? MEM_XGETBV(0) : 0;
     int ymm = (xcr0 & 0x04) == 0x04;
     int zmm = (xcr0 & 0xe0) == 0xe0;
 
     int cpuid = 0;
-    cpuid |= (ymm && avx2 && bmi1 && bmi2 && movbe)                     ? MEM_CPUID_AVX2   : 0;
-    cpuid |= (zmm && avx512f && avx512bw && avx512vbmi && bmi1 && bmi2) ? MEM_CPUID_AVX512 : 0;
+    cpuid |= (ymm && avx2 && bmi1 && bmi2 && movbe)                     ? MEM_CPUID_AVX2       : 0;
+    cpuid |= (zmm && avx512f && avx512bw && bmi1 && bmi2)               ? MEM_CPUID_AVX512     : 0;
+    cpuid |= (zmm && avx512f && avx512bw && avx512vbmi && bmi1 && bmi2) ? MEM_CPUID_AVX512VBMI : 0;
     return cpuid;
 }
 
@@ -3725,7 +3844,13 @@ static int MemCPUID(void)
     int result = 0;
 
 #if (MEM_COMPILER_CLANG || MEM_COMPILER_GCC) && defined(__AVX512F__) && defined(__AVX512BW__) && defined(__AVX512VBMI__) && defined(__BMI__) && defined(__BMI2__)
+    result |= MEM_CPUID_AVX512VBMI;
+#endif
+#if (MEM_COMPILER_CLANG || MEM_COMPILER_GCC) && defined(__AVX512F__) && defined(__AVX512BW__) && defined(__BMI__) && defined(__BMI2__)
     result |= MEM_CPUID_AVX512;
+#endif
+#if MEM_COMPILER_MSVC && (defined(__AVX10_VER__) && __AVX10_VER__ >= 1)
+    result |= MEM_CPUID_AVX512VBMI;
 #endif
 #if MEM_COMPILER_MSVC && defined(__AVX512F__) && defined(__AVX512BW__)
     result |= MEM_CPUID_AVX512;
@@ -4067,7 +4192,11 @@ int MemCompareI(const void* ptr1, const void* ptr2, size_t size)
 {
 #if MEM_ARCH_X64
     int cpuid = MemCPUID();
-    if (cpuid & MEM_CPUID_AVX512)
+    if (cpuid & MEM_CPUID_AVX512VBMI)
+    {
+        return MemCompareI_avx512vbmi(ptr1, ptr2, size);
+    }
+    else if (cpuid & MEM_CPUID_AVX512)
     {
         return MemCompareI_avx512(ptr1, ptr2, size);
     }

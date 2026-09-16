@@ -382,17 +382,18 @@ static const struct
 }
 memfun[] =
 {
-    { "std",            &MemCompare_std,     &MemCompareI_std,           &MemIsEqual_std,     &MemFind_std,       0,                    0                   },
-    { "generic",        &MemCompare_generic, &MemCompareI_generic,       &MemIsEqual_generic, &MemFind_generic,   &MemFindNot_generic,  0                   },
-    { "auto",           &MemCompare,         &MemCompareI,               &MemIsEqual,         &MemFind,           &MemFindNot,          0                   },
+    { "std",            &MemCompare_std,     &MemCompareI_std,           &MemIsEqual_std,     &MemFind_std,       0,                    0                    },
+    { "generic",        &MemCompare_generic, &MemCompareI_generic,       &MemIsEqual_generic, &MemFind_generic,   &MemFindNot_generic,  0                    },
+    { "auto",           &MemCompare,         &MemCompareI,               &MemIsEqual,         &MemFind,           &MemFindNot,          0                    },
 #if MEM_ARCH_RVV
-    { "rvv",            &MemCompare_rvv,     &MemCompareI_rvv,           &MemIsEqual_rvv,     &MemFind_rvv,       &MemFindNot_rvv,      0                   },
+    { "rvv",            &MemCompare_rvv,     &MemCompareI_rvv,           &MemIsEqual_rvv,     &MemFind_rvv,       &MemFindNot_rvv,      0                    },
 #elif MEM_ARCH_ARM64
-    { "neon",           &MemCompare_neon,    &MemCompareI_neon,          &MemIsEqual_neon,    &MemFind_neon,      &MemFindNot_neon,     0                   },
+    { "neon",           &MemCompare_neon,    &MemCompareI_neon,          &MemIsEqual_neon,    &MemFind_neon,      &MemFindNot_neon,     0                    },
 #elif MEM_ARCH_X64
-    { "sse2",           &MemCompare_sse2,    &MemCompareI_sse2,          &MemIsEqual_sse2,    &MemFind_sse2,      &MemFindNot_sse2,     0                   },
-    { "avx2",           &MemCompare_avx2,    &MemCompareI_avx2,          &MemIsEqual_avx2,    &MemFind_avx2,      &MemFindNot_avx2,     MEM_CPUID_AVX2      },
-    { "avx512",         &MemCompare_avx512,  &MemCompareI_avx512,        &MemIsEqual_avx512,  &MemFind_avx512,    &MemFindNot_avx512,   MEM_CPUID_AVX512    },
+    { "sse2",           &MemCompare_sse2,    &MemCompareI_sse2,          &MemIsEqual_sse2,    &MemFind_sse2,      &MemFindNot_sse2,     0                    },
+    { "avx2",           &MemCompare_avx2,    &MemCompareI_avx2,          &MemIsEqual_avx2,    &MemFind_avx2,      &MemFindNot_avx2,     MEM_CPUID_AVX2       },
+    { "avx512",         &MemCompare_avx512,  &MemCompareI_avx512,        &MemIsEqual_avx512,  &MemFind_avx512,    &MemFindNot_avx512,   MEM_CPUID_AVX512     },
+    { "avx512vbmi",     0,                   &MemCompareI_avx512vbmi,    0,                   0,                  0,                    MEM_CPUID_AVX512VBMI },
 #endif
 };
 
